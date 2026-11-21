@@ -1,212 +1,168 @@
-// config.js — every number and colour the city runs on, plus the seeded RNG and small maths helpers.
-// Nothing here draws or updates anything: it is the tuning sheet for the whole game.
-(function () {
+// Palm City — shared namespace, tuning constants and the sun-soaked palette.
+// Every module hangs off the single global PC object; the page loads them as classic
+// scripts in a fixed order, so nothing here imports anything and nothing touches the net.
+(function (global) {
   'use strict';
-  var PC = (window.PC = window.PC || {});
 
-  // The city grid. Blocks are 340 units square, roads 110 wide, 7 x 7 blocks, so the
-  // built city is 3260 x 3260; the sand and the ocean run east of the last avenue.
-  var CFG = {
-    SEED: 20261121,
-    BLOCK: 340,
-    ROAD: 110,
-    GRID: 7,
-    CELL: 450,
-    CITY_W: 3260,
-    CITY_H: 3260,
-    SAND_X: 3260,
-    WATER_X: 3620,
-    WORLD_W: 3980,
-    WORLD_H: 3260,
-    SIDEWALK: 22,
-    // Fixed simulation step. Every system assumes these seconds.
-    STEP: 1 / 60,
-    MAX_FRAME_STEPS: 4,
-    CAMERA_SCALE: 0.92,
+  const PC = (global.PC = global.PC || {});
+
+  PC.VERSION = '1.0.0';
+  PC.TITLE = 'Palm City';
+
+  // ---- world geometry -----------------------------------------------------
+  // The city is a square grid of blocks with a road on every seam and a beach along the
+  // south shore. One cell is one block plus one road; the world is GRID cells across.
+  PC.GRID = 13;
+  PC.CELL = 256;                    // block pitch in pixels
+  PC.ROAD = 72;                     // asphalt width, centred on every seam
+  PC.WORLD = PC.GRID * PC.CELL;     // 3328 px square
+  PC.SIDEWALK = 14;                 // kerb strip between asphalt and lot line
+  PC.BEACH_ROW = PC.GRID - 1;       // the last block row is sand, palms and water
+
+  // ---- simulation ---------------------------------------------------------
+  PC.STEP = 1 / 60;                 // fixed step, seconds
+  PC.MAX_STEPS = 5;                 // catch-up cap per frame
+
+  // ---- on foot ------------------------------------------------------------
+  PC.WALK_SPEED = 118;
+  PC.RUN_SPEED = 205;
+  PC.PLAYER_RADIUS = 9;
+  PC.PLAYER_MAX_HEALTH = 100;
+  PC.PLAYER_MAX_ARMOUR = 100;
+
+  // ---- cars ---------------------------------------------------------------
+  PC.CAR = {
+    accel: 520,          // px/s^2 under throttle
+    brake: 900,
+    reverse: 260,
+    maxSpeed: 430,
+    maxReverse: 150,
+    drag: 0.985,         // per step, rolling resistance
+    grip: 7.5,           // lateral velocity bleed: higher is tighter
+    steer: 2.9,          // rad/s at full lock, scaled by speed
+    handbrakeGrip: 2.2,
+    length: 44,
+    width: 22,
+    radius: 17,
   };
 
-  CFG.colors = {
-    asphalt: '#3a3e49',
-    asphaltAlt: '#353945',
-    asphaltWet: '#31343f',
-    roadLine: '#efe3c6',
-    roadLineDim: 'rgba(239,227,198,0.30)',
-    crosswalk: 'rgba(239,227,198,0.55)',
-    sidewalk: '#8b8377',
-    sidewalkAlt: '#948b7e',
-    sidewalkEdge: '#6f685e',
-    kerb: '#a49a8a',
-    sand: '#e3c495',
-    sandAlt: '#d8b787',
-    sandWet: '#c6a274',
-    ocean: '#17788f',
-    oceanDeep: '#0f5f77',
-    oceanHi: '#2fa9bd',
-    foam: '#dcf4f2',
-    grass: '#5f8c5c',
-    grassAlt: '#517a52',
-    shadow: 'rgba(20,16,26,0.34)',
-    night: 'rgba(28,20,48,0.16)',
-    building: ['#e2684f', '#e7dac0', '#2f9e96', '#5a4b72', '#c9603f', '#98a49c', '#d9a35a', '#8d4a63'],
-    buildingTop: ['#c9553f', '#d6c9ae', '#25867f', '#4a3d5f', '#ad5030', '#7f8b84', '#bf8a45', '#763b51'],
-    windowLit: '#ffd98a',
-    windowDark: '#26303c',
-    windowGlow: 'rgba(255,214,130,0.30)',
-    neon: ['#ff5fa2', '#57f0ff', '#ffd166', '#9d7bff', '#6cf0a0'],
-    palm: '#2f6b46',
-    palmHi: '#3d8556',
-    palmTrunk: '#6b4a33',
-    player: '#46e0c1',
-    playerDark: '#1d8f7c',
-    cop: '#3f6fd8',
-    copDark: '#274a99',
-    sirenRed: '#ff3b4e',
-    sirenBlue: '#3f8bff',
-    ped: ['#f2c14e', '#e26d5c', '#6ec1e4', '#b48ad8', '#8ed08a', '#f0a6ca', '#f3e2b8'],
-    cash: '#8ef0a0',
-    health: '#ff7373',
-    armour: '#6cb6ff',
-    ammo: '#ffcf6b',
-    marker: '#ffd166',
-    markerHot: '#fff2c4',
-    hudPanel: 'rgba(16,14,22,0.74)',
-    hudPanelSoft: 'rgba(16,14,22,0.46)',
-    hudText: '#f7f0e1',
-    hudDim: 'rgba(247,240,225,0.55)',
-    gold: '#ffcb52',
-    danger: '#ff5566',
-    ui: {
-      ink: '#141019',
-      cream: '#f7f0e1',
-      coral: '#e2684f',
-      teal: '#35c9b4',
-      pink: '#ff5fa2',
-      cyan: '#57f0ff',
-    },
+  // ---- traffic ------------------------------------------------------------
+  PC.TRAFFIC = {
+    count: 26,
+    speed: 150,
+    laneOffset: 17,      // right-hand drive: keep to the right of the centre line
+    turnChance: 0.34,
+    slowRadius: 120,
   };
 
-  CFG.tuning = {
-    // on foot
-    walkSpeed: 186,
-    sprintSpeed: 312,
-    footAccel: 1900,
-    footFriction: 12,
-    playerRadius: 13,
-    // cars
-    carMaxSpeed: 660,
-    carReverseMax: 210,
-    carAccel: 700,
-    carBrake: 1500,
-    carDrag: 0.72,
-    carGrip: 7.4,
-    carSteerRate: 2.5,
-    carRadius: 26,
-    carEnterRange: 78,
-    // damage
-    pedHealth: 100,
-    copHealth: 130,
-    carHealth: 320,
-    bulletDamage: 34,
-    // heat
-    heatDecayDelay: 9,
-    heatDecayRate: 0.55,
-    sirenRange: 1100,
-    // traffic density
-    trafficTarget: 26,
-    pedTarget: 46,
-    // economy
-    startCash: 120,
-    jobPayout: 700,
-    // camera
-    lookAhead: 70,
-    cameraStiffness: 6.2,
-    shakeDecay: 6,
+  // ---- police -------------------------------------------------------------
+  PC.POLICE = {
+    maxStars: 5,
+    heatPerStar: 100,
+    coolRate: 5.2,          // heat lost per second with no cops in sight
+    cruiserSpeed: 405,
+    cruiserAccel: 460,
+    spawnInterval: 3.2,
+    maxCars: 6,
+    shootRange: 300,
+    bulletSpeed: 1150,
   };
 
-  // ---- maths -----------------------------------------------------------------
-  var U = (PC.U = {});
+  // ---- combat -------------------------------------------------------------
+  PC.COMBAT = {
+    playerFireRate: 0.16,
+    playerDamage: 26,
+    playerRange: 620,
+    spread: 0.035,
+    pedHealth: 60,
+    copHealth: 85,
+    armourAbsorb: 0.65,
+  };
 
-  U.clamp = function (v, lo, hi) {
+  // ---- look ---------------------------------------------------------------
+  // Late afternoon on the coast: warm key light, violet shadows, sea haze.
+  PC.PALETTE = {
+    asphalt: '#3b4049',
+    asphaltWorn: '#454a54',
+    lane: '#e9dfc4',
+    kerb: '#cfc4ad',
+    pavement: '#d9cdb6',
+    pavementLine: '#c6b9a0',
+    sand: '#ead6a8',
+    sandDark: '#dcc492',
+    water: '#2b7f97',
+    waterLight: '#3fa2b4',
+    foam: '#e8f6f4',
+    grass: '#7fae6a',
+    grassDark: '#6b9a58',
+    lot: '#8d8b86',
+    shadow: 'rgba(28,26,48,0.30)',
+    sky: '#f6d9b0',
+    hud: '#f7efe0',
+    hudDim: 'rgba(247,239,224,0.55)',
+    accent: '#ff8a5c',
+    gold: '#ffd166',
+    star: '#ffc94a',
+    danger: '#ef5b5b',
+    police: '#4d7fd6',
+  };
+
+  // Pastel facades, the city's own art direction: washed coral, mint, cream, lilac.
+  PC.FACADES = [
+    { wall: '#e8917a', trim: '#f6c3ae', roof: '#b96a56' },
+    { wall: '#93cfb6', trim: '#c9e9d9', roof: '#5f9c85' },
+    { wall: '#f2e0bd', trim: '#fbf1da', roof: '#c3a97f' },
+    { wall: '#b8a5d6', trim: '#d8cbec', roof: '#8a789f' },
+    { wall: '#83bccb', trim: '#bde0e8', roof: '#5a8f9c' },
+    { wall: '#f0b184', trim: '#f9d6bb', roof: '#c08256' },
+    { wall: '#e6daa2', trim: '#f5edc8', roof: '#b3a86f' },
+    { wall: '#d3a3b8', trim: '#ecc9d7', roof: '#a1738a' },
+  ];
+
+  PC.CAR_COLOURS = ['#e9553f', '#f0c14b', '#4f8fd4', '#7dbb6a', '#efe6d5', '#3b4049', '#c86fae', '#57c6d8'];
+
+  // ---- helpers ------------------------------------------------------------
+  PC.clamp = function clamp(v, lo, hi) {
     return v < lo ? lo : v > hi ? hi : v;
   };
-  U.lerp = function (a, b, t) {
+  PC.lerp = function lerp(a, b, t) {
     return a + (b - a) * t;
   };
-  // Frame-rate independent smoothing toward a target.
-  U.damp = function (a, b, lambda, dt) {
-    return U.lerp(a, b, 1 - Math.exp(-lambda * dt));
-  };
-  U.dist = function (ax, ay, bx, by) {
-    var dx = ax - bx,
-      dy = ay - by;
+  PC.dist = function dist(ax, ay, bx, by) {
+    const dx = bx - ax;
+    const dy = by - ay;
     return Math.sqrt(dx * dx + dy * dy);
   };
-  U.dist2 = function (ax, ay, bx, by) {
-    var dx = ax - bx,
-      dy = ay - by;
-    return dx * dx + dy * dy;
+  PC.angleDiff = function angleDiff(a, b) {
+    let d = (b - a) % (Math.PI * 2);
+    if (d > Math.PI) d -= Math.PI * 2;
+    if (d < -Math.PI) d += Math.PI * 2;
+    return d;
   };
-  U.wrapAngle = function (a) {
+  PC.wrapAngle = function wrapAngle(a) {
     while (a > Math.PI) a -= Math.PI * 2;
     while (a < -Math.PI) a += Math.PI * 2;
     return a;
   };
-  U.turnToward = function (from, to, maxStep) {
-    var d = U.wrapAngle(to - from);
-    if (d > maxStep) d = maxStep;
-    if (d < -maxStep) d = -maxStep;
-    return from + d;
-  };
-  U.pointInRect = function (x, y, r) {
-    return x >= r.x && y >= r.y && x <= r.x + r.w && y <= r.y + r.h;
-  };
-  U.randRange = function (rng, lo, hi) {
-    return lo + (hi - lo) * rng();
-  };
-  U.pick = function (rng, list) {
-    return list[Math.floor(rng() * list.length) % list.length];
-  };
-  U.shade = function (hex, amount) {
-    var n = parseInt(hex.slice(1), 16);
-    var r = U.clamp(((n >> 16) & 255) + amount, 0, 255);
-    var g = U.clamp(((n >> 8) & 255) + amount, 0, 255);
-    var b = U.clamp((n & 255) + amount, 0, 255);
-    return 'rgb(' + r + ',' + g + ',' + b + ')';
-  };
-  U.money = function (n) {
-    return '$' + Math.max(0, Math.round(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  };
-  U.roundRect = function (ctx, x, y, w, h, r) {
-    var rr = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
-    ctx.beginPath();
-    ctx.moveTo(x + rr, y);
-    ctx.lineTo(x + w - rr, y);
-    ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
-    ctx.lineTo(x + w, y + h - rr);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
-    ctx.lineTo(x + rr, y + h);
-    ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
-    ctx.lineTo(x, y + rr);
-    ctx.quadraticCurveTo(x, y, x + rr, y);
-    ctx.closePath();
-  };
 
-  // mulberry32: tiny, deterministic, good enough for a city.
-  U.makeRng = function (seed) {
-    var a = seed >>> 0;
-    return function () {
+  /** Mulberry32: a small deterministic PRNG so the city is the same on every machine. */
+  PC.rng = function rng(seed) {
+    let a = seed >>> 0;
+    const next = function () {
       a = (a + 0x6d2b79f5) >>> 0;
-      var t = a;
+      let t = a;
       t = Math.imul(t ^ (t >>> 15), t | 1);
       t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
+    next.range = (lo, hi) => lo + next() * (hi - lo);
+    next.int = (lo, hi) => Math.floor(lo + next() * (hi - lo + 1));
+    next.pick = (arr) => arr[Math.floor(next() * arr.length)];
+    next.chance = (p) => next() < p;
+    return next;
   };
 
-  // Road helpers used by city, traffic and the minimap.
-  CFG.roadSpan = function (k) {
-    return k * CFG.CELL;
+  PC.money = function money(n) {
+    return '$' + Math.max(0, Math.round(n)).toLocaleString('en-US');
   };
-
-  PC.CFG = CFG;
-})();
+})(window);
