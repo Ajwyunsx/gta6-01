@@ -107,6 +107,8 @@ if (shot) {
     camera.x = fx - WIDTH / 2;
     camera.y = fy - HEIGHT / 2;
     camZoom = shotConfig.zoom ?? 1;
+    // A shot can ask to be captured on the briefing card rather than in the street.
+    if (shotConfig.state) state = shotConfig.state;
   }
   document.title = 'Palm City — ' + (Number(shot) || 1);
 } else {
@@ -473,9 +475,9 @@ function drawWorldFrame() {
   const cam = { x: camera.x + shakeX, y: camera.y + shakeY, w: camera.w, h: camera.h };
 
   ctx.save();
-  ctx.translate(WIDTH / 2, HEIGHT / 2);
+  // drawScene() already shifts everything into camera space (0..camera.w, 0..camera.h),
+  // so the only thing left is the zoom. Doing it any other way double-applies the pan.
   ctx.scale(camZoom, camZoom);
-  ctx.translate(-WIDTH / 2, -HEIGHT / 2);
 
   drawScene(ctx, {
     city,
@@ -494,6 +496,11 @@ function drawWorldFrame() {
   });
 
   // Ground layer for gameplay: markers and pickups, drawn in world space over the city.
+  // drawScene() restores its own camera translate on the way out, so this layer needs
+  // its own — without it markers, pickups, tracers and enemies drift off by the camera
+  // offset (invisible at any zoom other than 1).
+  ctx.save();
+  ctx.translate(-cam.x, -cam.y);
   for (const m of world.missionManager.markers) {
     if (m.kind === 'none' || m.taken) continue;
     if (m.x < cam.x - 120 || m.y < cam.y - 120 || m.x > cam.x + cam.w + 120 || m.y > cam.y + cam.h + 120) continue;
@@ -502,6 +509,7 @@ function drawWorldFrame() {
   world.combat.draw(ctx, cam, clock);
   world.missionManager.drawEnemies(ctx, cam, clock);
   effects.draw(ctx, cam);
+  ctx.restore();
   ctx.restore();
 
   if (params.get('debug')) {

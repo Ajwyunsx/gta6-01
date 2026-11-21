@@ -70,12 +70,13 @@ export function applyShot(world, index) {
   }
 
   if (n === 2) {
-    // On foot: a lit street corner, pedestrians about, pickups and the mission marker.
-    const spot = city.sidewalks.find((b) => b.col === 1 && b.row === 1) ?? city.sidewalks[0];
-    p.x = spot.x + spot.w * 0.5;
-    p.y = spot.y + spot.h - 30;
+    // On foot: the sidewalk in front of the Coral Room, the delivery marker glowing over
+    // the door, pedestrians about, cash on the ground. The whole first job in one frame.
+    const door = { x: ROAD_X[1] + 360, y: ROAD_Y[1] - 250 };
+    p.x = door.x + 40;
+    p.y = door.y + 158;
     p.heading = -Math.PI / 2;
-    p.aim = -Math.PI / 2 - 0.15;
+    p.aim = -Math.PI / 2 + 0.16;
     p.money = 620;
     p.health = 100;
     p.armor = 30;
@@ -83,20 +84,21 @@ export function applyShot(world, index) {
     world.missionManager.start(0);
     world.missionManager.state = 'active';
     world.missionManager.setStep(1);
-    world.combat.addPickup(p.x + 96, p.y - 50, 'cash', 120);
-    world.combat.addPickup(p.x - 86, p.y - 100, 'health', 35);
+    world.combat.addPickup(p.x + 104, p.y + 26, 'cash', 120);
+    world.combat.addPickup(p.x - 150, p.y - 90, 'health', 35);
     addShotPeds(world, [
-      [p.x + 60, p.y - 120], [p.x - 70, p.y - 60], [p.x + 130, p.y + 20],
-      [p.x - 140, p.y - 140], [p.x + 40, p.y - 210],
+      [p.x + 96, p.y - 96], [p.x - 74, p.y - 40], [p.x + 168, p.y + 70],
+      [p.x - 186, p.y - 150], [p.x + 64, p.y - 230],
     ]);
+    // Nothing parked in the hero's lap: a sedan below them draws later in the painter's
+    // order (higher y) and used to cover the one figure the shot is about.
     addShotCars(world, [
-      [spot.x + 40, spot.y + spot.h + 74, 0, '#4f9fb8'],
-      [spot.x + 210, spot.y + spot.h + 74, 0, '#c8556f'],
+      [p.x + 250, p.y + 96, 0, '#4f9fb8'],
+      [p.x - 268, p.y + 96, 0, '#c8556f'],
+      [p.x + 470, p.y + 96, 0, '#8a7bd8'],
     ]);
     world.hint = 'WASD to walk  ·  SHIFT to sprint  ·  click to fire';
-    // Negative y pushes the camera up so the player sits low in the frame, clear of the
-    // hint bar and dialogue box instead of buried under them.
-    return { offset: { x: 150, y: -150 }, zoom: 1.45, lockCamera: true };
+    return { offset: { x: -30, y: -34 }, zoom: 1.6, lockCamera: true };
   }
 
   if (n === 3) {
@@ -130,7 +132,7 @@ export function applyShot(world, index) {
     // survives the car rolling forward.
     world.police.stage = true;
     const slot = [
-      [-78, -155], [96, -200], [-16, -245], [-132, -292], [110, -338],
+      [-78, -150], [96, -192], [-16, -238], [-132, -282], [110, -326],
     ];
     for (let i = 0; i < slot.length; i++) {
       const cop = world.police.spawnCop({ player: { x: car.x, y: car.y + slot[i][1], heading: Math.PI / 2 } });
@@ -157,7 +159,9 @@ export function applyShot(world, index) {
     world.traffic.cars = world.cars.filter((c) => c.driver === 'traffic');
     world.traffic.target = 0;
     world.hint = 'WASD — drive  ·  SPACE — handbrake  ·  E — bail out';
-    return { offset: { x: 0, y: -165 }, zoom: 0.95, autoThrottle: 0.55, lockCamera: true };
+    // Player a little below centre, the cruisers stacked up the frame above them, and
+    // enough city either side that the shot reads as a street rather than a corridor.
+    return { offset: { x: 0, y: -60 }, zoom: 1.0, autoThrottle: 0.55, lockCamera: true };
   }
 
   // 4 — mission briefing over the street.
@@ -170,7 +174,9 @@ export function applyShot(world, index) {
   p.health = 92;
   p.armor = 60;
   p.stars = 0;
-  return { offset: { x: 0, y: 0 }, zoom: 1.0, lockCamera: true };
+  // main.js honours this so the capture lands on the briefing card itself: the moment
+  // every job actually begins, with the payout and the objective list on screen.
+  return { offset: { x: 0, y: 0 }, zoom: 1.0, lockCamera: true, state: 'brief' };
 }
 
 function addShotCars(world, list) {
