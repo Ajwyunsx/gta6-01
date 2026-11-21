@@ -341,6 +341,7 @@
     this.markers.club = { x: this.blocks[13].x + 120, y: this.blocks[13].y + 140, name: 'Sandbar Club' };
     this.markers.depot = { x: this.blocks[45].x + 160, y: this.blocks[45].y + 150, name: 'Harbour Depot' };
     this.markers.park = { x: this.blocks[16].x + 160, y: this.blocks[16].y + 160, name: 'Banyan Park' };
+    this.markers.bridge = { x: CFG.CITY_W - 80, y: CFG.CITY_H - 120, name: 'the Harbour Bridge' };
   };
 
   // ---- queries ---------------------------------------------------------------

@@ -118,10 +118,6 @@
       endX = player.x + (world.rng() - 0.5) * 8;
       endY = player.y + (world.rng() - 0.5) * 8;
     } else {
-      eend: {
-        endX = player.x + Math.cos(ang + (world.rng() - 0.5) * 0.9) * 900;
-        endY = player.y + Math.sin(ang + (world.rng() - 0.5) * 0.9) * 900;
-      }
       var traced = this.trace(muzzleX, muzzleY, ang, 900, null);
       endX = traced.x;
       endY = traced.y;

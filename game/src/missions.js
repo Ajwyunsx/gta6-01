@@ -1,366 +1,370 @@
-/* Palm City — the story. Seven jobs in one chain for Vera Okafor, who runs a courier desk out of
-   a café on the beach strip: fetch and deliver, collect debts, outrun a tail, steal a car, shake a
-   tail off, rob a check-cashing office and leave town clean. Each job hands over a marker on the
-   map, a briefing card, a live objective line and a cash reward; the chain ends with a payout and
-   the keys to the city. */
-(function (PC) {
+// missions.js — the story of Palm City, told in seven jobs. Each job has a giver standing at
+// a marker, a briefing card, an objective the HUD can show, and a payout. The chain is linear:
+// finish one and the next marker lights up somewhere across town.
+(function () {
   'use strict';
-
-  var C = PC.CONFIG, P = PC.PALETTE, U = PC.util;
+  var PC = window.PC;
+  var CFG = PC.CFG;
+  var U = PC.U;
 
   var JOBS = [
     {
-      id: 'courier', type: 'deliver', title: 'Special Delivery', giver: 'Vera Okafor', cash: 140,
-      brief: 'A sealed envelope has to reach the Solaria front desk before the manager does. No questions, no peek.',
-      line: 'Pick up the envelope at the bay-side kiosk.',
-      steps: [
-        { at: 'pickup', text: 'Take the envelope from the kiosk clerk' },
-        { at: 'drop', text: 'Deliver it to the Solaria hotel front desk' }
-      ]
+      id: 'rent',
+      title: 'Rent Is Due',
+      giver: 'Rosa at the Sandbox Diner',
+      where: 'diner',
+      brief:
+        'Rosa has kept your tab open for three months and she is done being nice. ' +
+        'Her ex left a duffel in a lock-up on Neon Pike. Bring it back and the tab is square.',
+      objective: 'Drive to the lock-up on Neon Pike and collect the duffel',
+      target: 'depot',
+      need: 'reach',
+      payout: 380,
+      outro: 'Rosa counts the cash twice, sighs, and pushes a plate of fries at you. "You eat. You look like a ghost."',
     },
     {
-      id: 'debts', type: 'collect', title: 'Three Small Debts', giver: 'Vera Okafor', cash: 180,
-      brief: 'Three people owe Vera money and all three are ducking her. Lean on them. Not too hard, the car needs to run after.',
-      line: 'Collect from three marks, then bring the cash back.',
-      steps: [
-        { at: 'm1', text: 'Collect from the pawnbroker' },
-        { at: 'm2', text: 'Collect from the motel clerk' },
-        { at: 'm3', text: 'Collect from the arcade owner' },
-        { at: 'drop', text: 'Return the cash to Vera at the café' }
-      ]
+      id: 'pawn',
+      title: 'The Pawn Ticket',
+      giver: 'Marco at Pelican Pawn',
+      where: 'pawn',
+      brief:
+        'Marco bought a watch he should not have bought. The seller wants it back, and he is ' +
+        'bringing friends. Stand in front of the counter until they lose their nerve.',
+      objective: 'Hold the pawn shop on Banyan Row against the collectors',
+      target: 'pawn',
+      need: 'defend',
+      wave: 3,
+      payout: 520,
+      outro: '"You are hired," Marco says, and immediately looks like he regrets saying it.',
     },
     {
-      id: 'tail', type: 'chase', title: 'The Tail', giver: 'Vera Okafor', cash: 220,
-      brief: 'Someone has been sitting on the café all morning in a green coupe. Follow it home before it follows you.',
-      line: 'Stay on the green coupe until it stops.',
-      steps: [
-        { at: 'pickup', text: 'Get in a car and pick up the coupe' },
-        { at: 'drop', text: 'Keep the coupe in sight until it parks' }
-      ]
+      id: 'marina',
+      title: 'Low Tide',
+      giver: 'Ines on the boardwalk',
+      where: 'marina',
+      brief:
+        'Ines runs the marina office and someone has been cutting moorings at night. ' +
+        'Her boat is next. Sit on the dock until the cutter shows up, then make him regret it.',
+      objective: 'Patrol the marina docks — find whoever is cutting the lines',
+      target: 'marina',
+      need: 'defend',
+      wave: 4,
+      payout: 640,
+      outro: 'Ines hands you a key on a cork float. "Berth nine. Do not tell anyone I gave you this."',
     },
     {
-      id: 'wheels', type: 'steal', title: 'Wheels for the Job', giver: 'Marco Ruiz', cash: 260,
-      brief: 'We need something fast and forgettable for Friday. The marina lot has a white coupe with the keys inside.',
-      line: 'Steal the white coupe from the marina lot.',
-      steps: [
-        { at: 'pickup', text: 'Steal the white coupe in the marina lot' },
-        { at: 'drop', text: 'Park it in the garage behind the café' }
-      ]
+      id: 'arcade',
+      title: 'High Score',
+      giver: 'Dex at Sunset Arcade',
+      where: 'arcade',
+      brief:
+        'Dex skims the arcade machines for a crew that does not exist on paper. Tonight the ' +
+        'pickup goes wrong and the money walks. Chase the runner down Sunset Strip before he reaches the bridge.',
+      objective: 'Chase down the runner before he reaches the bridge',
+      target: 'bridge',
+      need: 'chase',
+      payout: 760,
+      outro: 'Dex splits the take without being asked. "You are faster than you look. That is a compliment."',
     },
     {
-      id: 'shake', type: 'escape', title: 'Lose the Blue', giver: 'Marco Ruiz', cash: 300,
-      brief: 'The job left a trail and the trail has a cruiser on it. Get the stars off your back and get to the pier.',
-      line: 'Lose the police, then reach the pier.',
-      steps: [
-        { at: 'pickup', text: 'Get the heat off you' },
-        { at: 'drop', text: 'Reach the pier head' }
-      ]
+      id: 'hotel',
+      title: 'Room 402',
+      giver: 'Nadia at the Heron Hotel',
+      where: 'hotel',
+      brief:
+        'Nadia has a guest in 402 who pays in envelopes and never opens the curtains. ' +
+        'She wants him gone before the convention crowd arrives. He will not go quietly.',
+      objective: 'Clear room 402 at the Heron Hotel',
+      target: 'hotel',
+      need: 'defend',
+      wave: 5,
+      payout: 900,
+      outro: 'Nadia takes the envelope, tucks it into her jacket, and books you a room for the night. "On the house."',
     },
     {
-      id: 'heist', type: 'heist', title: 'The Check Cashing Job', giver: 'Marco Ruiz', cash: 520,
-      brief: 'Friday, 9 p.m. The office on Delacroix keeps its float in a safe. In, out, and the crew splits it on the sand.',
-      line: 'Hit the check-cashing office and get clear.',
-      steps: [
-        { at: 'pickup', text: 'Reach the office door' },
-        { at: 'crack', text: 'Crack the safe (hold position)' },
-        { at: 'drop', text: 'Get away and lose the heat' }
-      ]
+      id: 'club',
+      title: 'Last Call',
+      giver: 'Bram at the Sandbar Club',
+      where: 'club',
+      brief:
+        'Bram owes the wrong people a favour and they have come to collect it at closing time. ' +
+        'Get everyone out, keep the bar standing, and do not let them take the register.',
+      objective: 'Defend the Sandbar Club until closing time',
+      target: 'club',
+      need: 'defend',
+      wave: 6,
+      payout: 1150,
+      outro: 'Bram pours two glasses of something expensive and slides one across the bar. "Same time next month?"',
     },
     {
-      id: 'leave', type: 'finale', title: 'Leave Town Clean', giver: 'Vera Okafor', cash: 900,
-      brief: 'One last run: take the money to the pier, hand Vera the keys and walk away. That is the whole job.',
-      line: 'Bring the take to the pier and walk away.',
-      steps: [
-        { at: 'pickup', text: 'Collect the take from the café' },
-        { at: 'drop', text: 'Meet Vera at the pier head' }
-      ]
-    }
+      id: 'harbour',
+      title: 'The Long Pier',
+      giver: 'Ines, by radio',
+      where: 'marina',
+      brief:
+        'Every thread leads to the harbour depot: the watch, the moorings, the envelopes. ' +
+        'Whoever is running it is loading a container tonight. Go and end this.',
+      objective: 'Take the harbour depot and end it',
+      target: 'depot',
+      need: 'defend',
+      wave: 8,
+      payout: 2400,
+      finale: true,
+      outro:
+        'The container is full of nothing but old chairs. Somebody has been laughing at all of you for months. ' +
+        'Ines is quiet on the radio for a long moment. "Well," she says. "At least the city is ours now."',
+    },
   ];
 
-  /* Anchor points, all on the beach strip or the first two rows of town so the chain reads well. */
-  var SPOTS = {
-    cafe: { x: 5.2 * C.CELL, y: C.CITY_H + 128 },
-    kiosk: { x: 3.4 * C.CELL, y: C.CITY_H + 108 },
-    solaria: { x: 9.6 * C.CELL, y: 9.4 * C.CELL },
-    pawn: { x: 2.6 * C.CELL, y: 12.4 * C.CELL },
-    motel: { x: 12.4 * C.CELL, y: 13.6 * C.CELL },
-    arcade: { x: 7.2 * C.CELL, y: 11.2 * C.CELL },
-    marina: { x: 14.2 * C.CELL, y: C.CITY_H + 62 },
-    garage: { x: 5.8 * C.CELL, y: 14.4 * C.CELL },
-    pier: { x: C.CITY_W * 0.62 + 75, y: C.CITY_H + C.BEACH_H + 170 },
-    bank: { x: 10.6 * C.CELL, y: 8.2 * C.CELL }
+  function Missions(world) {
+    this.world = world;
+    this.jobs = JOBS;
+    this.index = 0;
+    this.state = 'idle';       // idle | offered | active | done | complete
+    this.timer = 0;
+    this.kills = 0;
+    this.waveLeft = 0;
+    this.waveClock = 0;
+    this.targetCar = null;
+    this.briefing = null;
+    this.bannerClock = 0;
+    this.lastResult = null;
+    this.spawned = [];
+    this.hint = '';
+  }
+
+  Missions.prototype.current = function () {
+    return this.jobs[Math.min(this.index, this.jobs.length - 1)];
   };
 
-  function makeMissions(world) {
-    return {
-      jobs: JOBS,
-      spots: SPOTS,
-      index: 0,
-      state: 'idle',         // idle | brief | active | done
-      job: null,
-      step: 0,
-      marker: null,
-      markerKind: 'pickup',
-      targets: [],
-      timer: 0,
-      clubTimer: 0,
-      briefTime: 0,
-      chaseTarget: null,
-      safeTimer: 0,
-      safeOpen: false,
-      completed: 0,
-      log: []
-    };
-  }
+  Missions.prototype.markerPos = function () {
+    var job = this.current();
+    if (!job) return null;
+    var m = this.world.city.markers[job.where];
+    if (!m) return null;
+    return m;
+  };
 
-  function startChain(ms) {
-    ms.index = 0;
-    ms.state = 'idle';
-    ms.completed = 0;
-    ms.log.length = 0;
-  }
+  Missions.prototype.objectivePos = function () {
+    var job = this.current();
+    if (!job || this.state !== 'active') return null;
+    var city = this.world.city;
+    if (job.need === 'chase' && this.targetCar) return { x: this.targetCar.x, y: this.targetCar.y };
+    var t = city.markers[job.target] || city.markers[job.where];
+    return t;
+  };
 
-  function beginJob(ms, world) {
-    var job = ms.jobs[ms.index];
-    if (!job) return;
-    ms.job = job;
-    ms.state = 'brief';
-    ms.briefTime = 4.6;
-    ms.step = 0;
-    ms.safeOpen = false;
-    ms.safeTimer = 0;
-    ms.targets = [];
-    ms.chaseTarget = null;
-    buildTargets(ms, job, world);
-    world.audio.sting();
-    world.hud.flash(job.title, P.accent);
-  }
+  Missions.prototype.update = function (dt) {
+    var world = this.world;
+    var player = world.player;
+    if (this.bannerClock > 0) this.bannerClock -= dt;
 
-  function buildTargets(ms, job, world) {
-    var s = SPOTS;
-    var rng = world.rng;
-    if (job.id === 'courier') {
-      ms.targets = [
-        { at: 'pickup', x: s.kiosk.x, y: s.kiosk.y, label: 'Kiosk', kind: 'pickup' },
-        { at: 'drop', x: s.solaria.x, y: s.solaria.y, label: 'Solaria', kind: 'drop' }
-      ];
-    } else if (job.id === 'debts') {
-      ms.targets = [
-        { at: 'm1', x: s.pawn.x, y: s.pawn.y, label: 'Pawnbroker', kind: 'pickup' },
-        { at: 'm2', x: s.motel.x, y: s.motel.y, label: 'Motel', kind: 'pickup' },
-        { at: 'm3', x: s.arcade.x, y: s.arcade.y, label: 'Arcade', kind: 'pickup' },
-        { at: 'drop', x: s.cafe.x, y: s.cafe.y, label: 'Vera', kind: 'drop' }
-      ];
-    } else if (job.id === 'tail') {
-      ms.targets = [{ at: 'pickup', x: s.cafe.x + 40, y: s.cafe.y, label: 'Coupe', kind: 'chase' }];
-      ms.chaseTarget = spawnChaseTarget(world, s.cafe.x + 120, s.cafe.y - 10, rng);
-    } else if (job.id === 'wheels') {
-      var spot = world.marineCoupe;
-      ms.targets = [
-        { at: 'pickup', x: spot.x, y: spot.y, label: 'White coupe', kind: 'steal' },
-        { at: 'drop', x: s.garage.x, y: s.garage.y, label: 'Garage', kind: 'drop' }
-      ];
-    } else if (job.id === 'shake') {
-      ms.targets = [
-        { at: 'pickup', x: s.cafe.x + 30, y: s.cafe.y - 30, label: 'Clear', kind: 'escape' },
-        { at: 'drop', x: s.pier.x, y: s.pier.y, label: 'Pier head', kind: 'drop' }
-      ];
-    } else if (job.id === 'heist') {
-      ms.targets = [
-        { at: 'pickup', x: s.bank.x, y: s.bank.y, label: 'Office', kind: 'pickup' },
-        { at: 'crack', x: s.bank.x + 26, y: s.bank.y + 20, label: 'Safe', kind: 'crack' },
-        { at: 'drop', x: s.cafe.x, y: s.cafe.y, label: 'Café', kind: 'drop' }
-      ];
-    } else if (job.id === 'leave') {
-      ms.targets = [
-        { at: 'pickup', x: s.cafe.x, y: s.cafe.y, label: 'Vera', kind: 'pickup' },
-        { at: 'drop', x: s.pier.x, y: s.pier.y, label: 'Pier head', kind: 'drop' }
-      ];
-    }
-  }
-
-  function spawnChaseTarget(world, x, y, rng) {
-    var car = PC.vehicles.makeCar(x, y, Math.PI, { rng: rng, type: 'coupe', paint: '#3f7d5c' });
-    car.traffic = true;
-    car.axis = 'x'; car.dir = -1; car.gx = Math.round(x / C.CELL); car.gy = 0;
-    car.cruise = 170;
-    car.speed = 0;
-    car.chaseScripted = true;
-    world.parked.push(car);
-    return car;
-  }
-
-  function currentTarget(ms) {
-    if (!ms.job || ms.state !== 'active') return null;
-    return ms.targets[ms.step] || null;
-  }
-
-  function update(ms, world, dt) {
-    if (ms.state === 'brief') {
-      ms.briefTime -= dt;
-      if (ms.briefTime <= 0) ms.state = 'active';
-    }
-    if (ms.state === 'idle') {
-      // Vera waits at the café; walking into her marker begins the next job.
-      if (ms.index < ms.jobs.length) {
-        var c = SPOTS.cafe;
-        if (U.dist2(world.player.x, world.player.y, c.x, c.y) < 46 * 46) beginJob(ms, world);
+    // the briefing card waits for the player to press E or walk away
+    if (this.state === 'offered') {
+      if (this.briefing && this.briefing.autoIn !== undefined) {
+        this.briefing.autoIn -= dt;
+        if (this.briefing.autoIn <= 0) this.begin();
       }
       return;
     }
-    if (ms.state !== 'active') return;
-
-    var tgt = currentTarget(ms);
-    if (!tgt) return;
-
-    if (ms.job.id === 'tail' && ms.chaseTarget) updateChaseScript(ms, world, dt);
-    if (ms.job.id === 'shake') {
-      // the job seeds the heat once
-      if (!ms.heatSeeded) { ms.heatSeeded = true; world.heat.stars = Math.max(world.heat.stars, 2); }
-    }
-    if (ms.job.id === 'heist' && tgt.kind === 'crack') {
-      var d2 = U.dist2(world.player.x, world.player.y, tgt.x, tgt.y);
-      if (d2 < 46 * 46 && !world.player.inCar) {
-        ms.safeTimer += dt;
-        world.hud.objectiveProgress = ms.safeTimer / 3;
-        if (ms.safeTimer >= 3) { ms.safeTimer = 0; ms.step++; ms.safeOpen = true; world.hud.flash('Safe cracked', P.gold); world.audio.sting(); }
-        return;
-      } else { ms.safeTimer = Math.max(0, ms.safeTimer - dt); world.hud.objectiveProgress = ms.safeTimer / 3; }
-    }
-
-    var pass = false;
-    if (tgt.kind === 'chase') {
-      pass = reachedChaseEnd(ms, world, tgt);
-    } else if (tgt.kind === 'escape') {
-      pass = world.heat.stars === 0;
-    } else if (tgt.kind === 'steal') {
-      pass = world.player.inCar && world.player.inCar.stolenWhite;
-    } else {
-      pass = U.dist2(world.player.x, world.player.y, tgt.x, tgt.y) < 40 * 40;
-    }
-
-    if (pass) advance(ms, world);
-  }
-
-  function reachedChaseEnd(ms, world, tgt) {
-    var c = ms.chaseTarget;
-    if (!c) return true;
-    if (c.driver === 'player') return true;
-    return c.arrived;
-  }
-
-  function updateChaseScript(ms, world, dt) {
-    var c = ms.chaseTarget;
-    if (!c || c.driver === 'player') return;
-    ms.clubTimer += dt;
-    // drive in a lazy loop around the block for a while, then park
-    if (ms.clubTimer > 14 && !c.arrived) {
-      c.speed = U.approach(c.speed, 0, 200 * dt);
-      if (c.speed < 2) c.arrived = true;
+    if (this.state === 'idle') {
+      var mk = this.markerPos();
+      if (mk && U.dist(mk.x, mk.y, player.x, player.y) < 46 && !player.inCar) {
+        this.offer();
+      }
       return;
     }
-    c.speed = U.approach(c.speed, 175, 140 * dt);
-    c.angle += Math.sin(ms.clubTimer * 0.9) * 0.016;
-    c.x += Math.cos(c.angle) * c.speed * dt;
-    c.y += Math.sin(c.angle) * c.speed * dt;
-    if (PC.city.collideCircle(world.city, c.x, c.y, 20)) {
-      c.angle += 1.4;
-      c.x -= Math.cos(c.angle) * c.speed * dt;
-      c.y -= Math.sin(c.angle) * c.speed * dt;
-    }
-  }
+    if (this.state !== 'active') return;
 
-  function advance(ms, world) {
-    ms.step += 1;
-    if (ms.step >= ms.targets.length) {
-      completeJob(ms, world);
-    } else {
-      world.hud.flash('Objective cleared', P.accent2);
-      world.audio.pickup();
-    }
-  }
+    var job = this.current();
+    this.timer += dt;
 
-  function completeJob(ms, world) {
-    var job = ms.job;
-    ms.state = 'done';
-    ms.completed += 1;
-    world.money += job.cash;
-    world.stats.jobs += 1;
-    ms.log.push(job.title);
-    world.hud.flash(job.title + ' — $' + job.cash, P.money);
-    world.hud.banner('Job complete', '$' + job.cash + ' paid');
-    world.audio.cash();
-    world.effects.cash(world.player.x, world.player.y, 14);
-    if (ms.job.id === 'wheels' && world.player.inCar) world.player.inCar.stolenWhite = false;
-    ms.job = null;
-    ms.index += 1;
-    ms.heatSeeded = false;
-    ms.clubTimer = 0;
-    if (ms.index >= ms.jobs.length) {
-      ms.state = 'finished';
-      world.onStoryComplete();
-    } else {
-      ms.state = 'idle';
-      ms.timer = 2.5;
-      ms.chaseTarget = null;
+    if (job.need === 'reach') {
+      var tgt = world.city.markers[job.target];
+      if (tgt && U.dist(tgt.x, tgt.y, player.x, player.y) < 70) {
+        this.complete();
+      }
+      return;
     }
-  }
 
-  function objectiveText(ms) {
-    if (ms.state === 'finished') return 'All jobs done. The city is yours.';
-    if (ms.state === 'idle' || ms.state === 'brief') {
-      if (ms.state === 'idle') return 'See Vera at the café for work (' + (ms.index + 1) + '/' + ms.jobs.length + ')';
+    if (job.need === 'chase') {
+      if (!this.targetCar) this.spawnRunner();
+      if (this.targetCar) {
+        var d = U.dist(this.targetCar.x, this.targetCar.y, player.x, player.y);
+        var bridge = world.city.markers.bridge;
+        if (bridge && U.dist(this.targetCar.x, this.targetCar.y, bridge.x, bridge.y) < 90) {
+          this.fail('The runner reached the bridge and vanished into traffic.');
+          return;
+        }
+        if (d < 70 || this.targetCar.health <= 0) {
+          this.complete();
+          return;
+        }
+        if (d > 2400) {
+          // keep the chase honest: the runner waits at the light for you
+          this.targetCar.vx *= 0.4;
+          this.targetCar.vy *= 0.4;
+        }
+      }
+      return;
     }
-    if (!ms.job) return '';
-    var tgt = ms.targets[ms.step];
-    return tgt ? tgt.label + ' — ' + (ms.job.steps[ms.step] ? ms.job.steps[ms.step].text : '') : ms.job.line;
-  }
 
-  /* What the map marker should be right now: Vera's café between jobs, else the live objective. */
-  function markerFor(ms, world) {
-    if (ms.state === 'active') {
-      var tgt = currentTarget(ms);
-      if (tgt) return { x: tgt.kind === 'chase' && ms.chaseTarget ? ms.chaseTarget.x : tgt.x, y: tgt.kind === 'chase' && ms.chaseTarget ? ms.chaseTarget.y : tgt.y, kind: tgt.kind };
+    if (job.need === 'defend') {
+      this.updateDefend(dt, job);
+      return;
     }
-    if (ms.state === 'idle' || ms.state === 'brief') {
-      if (ms.state === 'idle') return { x: SPOTS.cafe.x, y: SPOTS.cafe.y, kind: 'npc' };
-    }
-    return null;
-  }
-
-  function drawMarkers(ms, ctx, cam, t) {
-    var m = markerFor(ms, null);
-    if (!m) return;
-    var vw = cam.w || C.VW, vh = cam.h || C.VH;
-    if (m.x < cam.x - 60 || m.x > cam.x + vw + 60 || m.y < cam.y - 60 || m.y > cam.y + vh + 60) return;
-    var pulse = 1 + Math.sin(t * 3.4) * 0.12;
-    ctx.save();
-    ctx.translate(m.x, m.y);
-    ctx.globalAlpha = 0.25;
-    ctx.fillStyle = m.kind === 'drop' ? P.accent2 : P.accent;
-    ctx.beginPath(); ctx.arc(0, 0, 34 * pulse, 0, 6.283); ctx.fill();
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = m.kind === 'drop' ? P.accent2 : P.accent;
-    ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(0, 0, 22 * pulse, 0, 6.283); ctx.stroke();
-    // a downward chevron bouncing above the ring
-    var bob = Math.abs(Math.sin(t * 3.4)) * 6;
-    ctx.fillStyle = m.kind === 'drop' ? P.accent2 : P.accent;
-    ctx.beginPath();
-    ctx.moveTo(0, -34 - bob); ctx.lineTo(-8, -46 - bob); ctx.lineTo(8, -46 - bob);
-    ctx.closePath(); ctx.fill();
-    ctx.restore();
-  }
-
-  PC.missions = {
-    make: makeMissions,
-    startChain: startChain,
-    beginJob: beginJob,
-    update: update,
-    objectiveText: objectiveText,
-    markerFor: markerFor,
-    drawMarkers: drawMarkers,
-    JOBS: JOBS,
-    SPOTS: SPOTS
   };
-})(window.PC = window.PC || {});
+
+  // ---- defend jobs -----------------------------------------------------------
+  Missions.prototype.updateDefend = function (dt, job) {
+    var world = this.world;
+    var player = world.player;
+    var site = world.city.markers[job.target] || world.city.markers[job.where];
+    this.waveClock -= dt;
+
+    if (this.waveLeft <= 0 && this.kills < job.wave) {
+      if (this.waveClock <= 0) {
+        this.spawnAttacker(site, job);
+        this.waveLeft--;
+        this.waveClock = U.randRange(world.rng, 1.4, 2.6);
+      }
+    }
+    // any live attacker close to the site is a threat the HUD mentions
+    var threats = 0;
+    for (var k = 0; k < world.hostiles.length; k++) {
+      if (world.hostiles[k].alive) threats++;
+    }
+    if (threats === 0 && this.kills >= job.wave) {
+      this.complete();
+      return;
+    }
+    // wandering too far off the site abandons the fight
+    if (site && U.dist(site.x, site.y, player.x, player.y) > 1400) {
+      this.fail('You left the site. The job fell apart without you.');
+    }
+  };
+
+  Missions.prototype.spawnAttacker = function (site, job) {
+    var world = this.world;
+    var rng = world.rng;
+    for (var tries = 0; tries < 18; tries++) {
+      var ang = rng() * 6.28;
+      var dist = U.randRange(rng, 300, 520);
+      var x = U.clamp(site.x + Math.cos(ang) * dist, 30, CFG.CITY_W - 30);
+      var y = U.clamp(site.y + Math.sin(ang) * dist, 30, CFG.CITY_H - 30);
+      if (world.city.hitBuilding(x, y, 16)) continue;
+      world.spawnHostile(x, y, job.finale ? 1.3 : 1);
+      return;
+    }
+  };
+
+  // ---- flow ------------------------------------------------------------------
+  Missions.prototype.offer = function () {
+    var job = this.current();
+    this.state = 'offered';
+    this.briefing = { job: job, t: 0, autoIn: undefined };
+    this.world.audio.missionPing();
+    this.world.hud.banner('JOB: ' + job.title.toUpperCase(), job.giver);
+  };
+
+  Missions.prototype.begin = function () {
+    var job = this.current();
+    this.state = 'active';
+    this.timer = 0;
+    this.kills = 0;
+    this.waveLeft = 0;
+    this.waveClock = 0.8;
+    this.briefing = null;
+    this.spawned.length = 0;
+    this.world.hostiles.length = 0;
+    if (job.need === 'chase') this.spawnRunner();
+    this.world.hud.banner(job.title.toUpperCase(), job.objective);
+    this.world.audio.missionStart();
+  };
+
+  Missions.prototype.spawnRunner = function () {
+    var world = this.world;
+    var city = world.city;
+    var job = this.current();
+    var start = city.markers[job.where];
+    var startCar = new PC.Car(start.x + 60, start.y + 40, 0, {
+      name: 'Courier Coupe', body: '#e7dac0', trim: '#2a2630',
+      len: 92, wid: 46, top: 620, accel: 720, handling: 1.05, seats: 2,
+    }, world.rng);
+    startCar.driver = 'runner';
+    world.cars.list.push(startCar);
+    this.targetCar = startCar;
+    // head for the bridge marker at speed
+    var bridge = city.markers.bridge || { x: CFG.CITY_W, y: CFG.CITY_H };
+    startCar.angle = Math.atan2(bridge.y - startCar.y, bridge.x - startCar.x);
+    startCar.vx = Math.cos(startCar.angle) * 300;
+    startCar.vy = Math.sin(startCar.angle) * 300;
+    // the runner is its own little chase system, in world.js
+    world.runner = { car: startCar, target: bridge, loot: true };
+  };
+
+  Missions.prototype.complete = function () {
+    var job = this.current();
+    var world = this.world;
+    this.state = 'done';
+    this.lastResult = { ok: true, job: job, timer: this.timer };
+    world.player.cash += job.payout;
+    world.stats.cash += job.payout;
+    world.stats.jobs++;
+    this.index++;
+    this.targetCar = null;
+    world.runner = null;
+    world.hostiles.length = 0;
+    world.audio.missionComplete();
+    world.hud.banner('JOB COMPLETE', U.money(job.payout) + ' paid — ' + job.outro);
+    if (this.index >= this.jobs.length) {
+      this.state = 'complete';
+      world.hud.banner('PALM CITY IS YOURS', 'Seven jobs. One city. Nothing left to prove.');
+    } else {
+      this.state = 'idle';
+      this.briefing = null;
+    }
+    world.save();
+  };
+
+  Missions.prototype.fail = function (reason) {
+    var world = this.world;
+    this.state = 'idle';
+    this.lastResult = { ok: false, reason: reason };
+    this.targetCar = null;
+    world.runner = null;
+    world.hostiles.length = 0;
+    world.hud.banner('JOB FAILED', reason);
+    world.audio.missionFail();
+  };
+
+  Missions.prototype.onHostileDown = function () {
+    this.kills++;
+    this.waveLeft = 0;
+  };
+
+  Missions.prototype.reset = function () {
+    this.index = 0;
+    this.state = 'idle';
+    this.briefing = null;
+    this.targetCar = null;
+    this.world.runner = null;
+  };
+
+  Missions.prototype.hudObjective = function () {
+    if (this.state === 'active') {
+      var job = this.current();
+      if (job.need === 'defend') return job.objective + ' (' + Math.min(this.kills, job.wave) + '/' + job.wave + ')';
+      return job.objective;
+    }
+    if (this.state === 'idle' && this.index < this.jobs.length) {
+      var m = this.markerPos();
+      return 'Next job: ' + this.current().title + (m ? ' — ' + m.name : '');
+    }
+    if (this.state === 'complete') return 'All seven jobs complete';
+    return '';
+  };
+
+  PC.Missions = Missions;
+  PC.JOBS = JOBS;
+})();
