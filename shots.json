@@ -1,6 +1,38 @@
 [
-  { "name": "1-cover.jpg", "query": "?shot=1&frames=90" },
-  { "name": "2-onfoot.jpg", "query": "?shot=2&frames=90" },
-  { "name": "3-police.jpg", "query": "?shot=3&frames=90" },
-  { "name": "4-mission.jpg", "query": "?shot=4&frames=90" }
+  {
+    "name": "1-cover.jpg",
+    "shot": 1,
+    "frames": 120,
+    "query": "?shot=1&frames=120",
+    "title": "The strip at golden hour",
+    "camera": "beach-side avenue, car moving north, ocean and pier on the right, neon shops on the left",
+    "shows": ["driving", "traffic", "pedestrians", "hud", "minimap", "speedometer"]
+  },
+  {
+    "name": "2-onfoot.jpg",
+    "shot": 2,
+    "frames": 120,
+    "query": "?shot=2&frames=120",
+    "title": "On foot in Coral Heights",
+    "camera": "mid-block pavement, crowd around the player, parked cars at the kerb",
+    "shows": ["walking", "crowd", "shopfronts", "health and armour", "street minimap"]
+  },
+  {
+    "name": "3-police.jpg",
+    "shot": 3,
+    "frames": 120,
+    "query": "?shot=3&frames=120",
+    "title": "Three stars on the avenue",
+    "camera": "side-on down an east-west avenue: player car running, cruisers closing, roadblock ahead",
+    "shows": ["police chase", "sirens", "officers on foot", "wanted stars", "heat on the minimap"]
+  },
+  {
+    "name": "4-mission.jpg",
+    "shot": 4,
+    "frames": 120,
+    "query": "?shot=4&frames=120",
+    "title": "Last Call",
+    "camera": "the Sandbar Club forecourt, crew closing in, tracer in the air, objective on the HUD",
+    "shows": ["active mission", "hostiles", "tracer", "objective banner", "ammo"]
+  }
 ]

@@ -679,27 +679,50 @@
     }
     ctx.restore();
 
-    // police livery and light bar, drawn unrotated so the bar can flash
+    // police livery: blue half-doors, a crest on the rear quarter and a light bar that
+    // actually flashes red and blue. Drawn in the car's frame so it stays put.
     if (car.driver === 'police') {
-      var blink = Math.sin(world.time * 15) > 0;
+      var blink = Math.sin(world.time * 13) > 0;
+      var beam = Math.sin(world.time * 13);
       ctx.save();
       ctx.translate(car.x, car.y);
       ctx.rotate(car.angle);
-      ctx.fillStyle = '#2b3a5e';
-      ctx.fillRect(-L * 0.28, -W / 2 + 2, L * 0.56, 5);
-      ctx.fillRect(-L * 0.28, W / 2 - 7, L * 0.56, 5);
-      ctx.fillStyle = blink ? C.sirenRed : '#7a2633';
-      ctx.fillRect(-6, -W / 2 + 6, 12, 7);
-      ctx.restore();
-      // the glow on the road
-      var gy = car.y;
-      var grad = ctx.createRadialGradient(car.x, gy, 6, car.x, gy, 110);
-      grad.addColorStop(0, blink ? 'rgba(255,59,78,0.35)' : 'rgba(63,139,255,0.35)');
-      grad.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(car.x, gy, 110, 0, 6.283);
+
+      // door panels
+      ctx.fillStyle = '#243755';
+      U.roundRect(ctx, -L * 0.16, -W / 2 + 1, L * 0.34, 9, 2);
       ctx.fill();
+      U.roundRect(ctx, -L * 0.16, W / 2 - 10, L * 0.34, 9, 2);
+      ctx.fill();
+      // a cream stripe along the flanks so the shape reads as a cruiser, not a white box
+      ctx.fillStyle = 'rgba(247,240,225,0.85)';
+      ctx.fillRect(-L * 0.42, -W / 2 + 10, L * 0.30, 3);
+      ctx.fillRect(-L * 0.42, W / 2 - 13, L * 0.30, 3);
+
+      // light bar, straddling the roof
+      ctx.fillStyle = '#1b1f2a';
+      U.roundRect(ctx, -7, -W / 2 + 4, 16, W - 8, 3);
+      ctx.fill();
+      ctx.fillStyle = blink ? C.sirenRed : '#5c1f2a';
+      ctx.fillRect(-6, -W / 2 + 6, 7, W - 12);
+      ctx.fillStyle = blink ? '#20365e' : '#4fa8ff';
+      ctx.fillRect(3, -W / 2 + 6, 7, W - 12);
+      ctx.restore();
+
+      // the splash of light on the road, swinging with the bar
+      var on = Math.abs(beam) > 0.35;
+      var glowCol = beam > 0 ? '255,59,78' : '63,139,255';
+      if (on) {
+        ctx.globalCompositeOperation = 'lighter';
+        var grad = ctx.createRadialGradient(car.x, car.y, 6, car.x, car.y, 96);
+        grad.addColorStop(0, 'rgba(' + glowCol + ',0.16)');
+        grad.addColorStop(1, 'rgba(' + glowCol + ',0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(car.x, car.y, 96, 0, 6.283);
+        ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
+      }
     }
   };
 

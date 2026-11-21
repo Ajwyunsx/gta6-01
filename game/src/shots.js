@@ -89,68 +89,90 @@
   // 2 — ON FOOT. Mid-pavement in a shop block, pedestrians all round, the job marker ahead.
   SCENES[2] = function (world) {
     clearTraffic(world);
-    var bx = CFG.CELL * 2 + CFG.ROAD;
-    var by = CFG.CELL * 3 + CFG.ROAD;
+    // On foot, out on the open sand: the cleanest possible read of the character. Cream beach,
+    // palms casting long shadows, a couple of umbrellas, the sea at the edge of frame and the
+    // city glowing away on the left.
+    var wx = CFG.SAND_X + 232;
+    var wy = 2320;
+
     world.player.inCar = null;
-    world.player.x = bx + 190;
-    world.player.y = by + CFG.BLOCK - 30;
-    world.player.angle = -Math.PI / 2;
-    world.player.vx = 26;
-    world.player.vy = -70;
-    world.player.stride = 2.1;
+    world.player.x = wx;
+    world.player.y = wy;
+    world.player.angle = -1.34;
+    world.player.vx = 18;
+    world.player.vy = -78;
+    world.player.stride = 2.8;
     world.player.health = 82;
     world.player.armour = 48;
-    crowd(world, bx + 210, by + CFG.BLOCK - 76, 13, 130);
-    for (var k = 0; k < 3; k++) {
-      propCar(world, bx + 40 + k * 118, by + CFG.BLOCK + 62, 0, k + 2);
+    world.aiming = true;
+
+    // a scattering of people further down the beach so the scale reads
+    var mates = [
+      [wx + 128, wy - 118, -1.1], [wx - 136, wy - 190, 0.4], [wx + 176, wy + 126, 2.4],
+      [wx - 118, wy + 82, -2.0], [wx + 34, wy + 214, 1.2]
+    ];
+    for (var m = 0; m < mates.length; m++) {
+      var ped = world.peds.spawnAt(mates[m][0], mates[m][1]);
+      if (ped) ped.angle = mates[m][2];
     }
     world.police.stars = 0;
     world.police.units.length = 0;
-    world.shotCam = { x: bx + 190, y: by + CFG.BLOCK - 170, zoom: 1.06 };
-    world.camera.zoom = 1.06;
-    world.camera.x = bx + 190;
-    world.camera.y = by + CFG.BLOCK - 170;
-    world.hud.banner('ON FOOT', 'Coral Heights — the pavement is busier than it looks');
+    world.shotCam = { x: wx + 6, y: wy - 54, zoom: 2.55 };
+    world.camera.zoom = 2.55;
+    world.camera.x = wx + 6;
+    world.camera.y = wy - 54;
+    world.hud.banner('ON FOOT', 'The sand at dusk — the strip one block west, the sea one east');
     return true;
   };
 
-  // 3 — POLICE. Three stars; cruisers box the player's car on the avenue and officers are
-  // out on foot with pistols drawn. Stars, siren glow and minimap all show the chase.
   SCENES[3] = function (world) {
     clearTraffic(world);
-    var px = AVENUE - 26;
-    var py = 1480;
-    var pcar = parkCar(world, px, py, -Math.PI / 2, 7);
-    pcar.vy = -30;
-    world.player.health = 58;
-    world.player.armour = 30;
-    var spots = [
-      [px, py - 230, Math.PI / 2],
-      [px + 52, py + 250, -Math.PI / 2],
-      [px, py + 430, -Math.PI / 2],
-      [px + 52, py - 410, Math.PI / 2]
-    ];
-    for (var c = 0; c < spots.length; c++) {
-      var sp = spots[c];
-      var car = copCar(world, sp[0], sp[1], sp[2]);
-      world.police.units.push(new PC.CopUnit(car, null, sp[0], sp[1]));
+    // The bust: the player's coupe is stopped in the eastbound lane with a cruiser pulled up
+    // nose-to-nose in front and a second one blocking behind. A third is slewing in across
+    // the inside lane, and two officers are out of their cars on the tarmac with pistols up.
+    // Tight camera so the light bars, the blue doors and the star row all read at once.
+    var roadY = CFG.CELL * 4 + CFG.ROAD / 2;
+    var laneS = roadY + 26;
+    var laneN = roadY - 28;
+    var cx = 1520;
+
+    var pcar = parkCar(world, cx, laneS, 0, 0);
+    pcar.speed = 0;
+
+    var ahead = copCar(world, cx + 196, laneS + 4, Math.PI - 0.02);
+    var behind = copCar(world, cx - 206, laneS + 4, 0.02);
+    var cutting = copCar(world, cx + 128, laneN - 6, Math.PI - 1.02);
+    var cops = [ahead, behind, cutting];
+    for (var c = 0; c < cops.length; c++) {
+      cops[c].speed = 0;
+      cops[c].vx = 0;
+      cops[c].vy = 0;
+      world.police.units.push(new PC.CopUnit(cops[c], null, cops[c].x, cops[c].y));
     }
-    // two officers out of their cars, flanking the player's door
-    var offA = new PC.Officer(px + 44, py - 60);
-    offA.angle = Math.atan2(py - offA.y, px - offA.x);
-    var offB = new PC.Officer(px - 40, py + 66);
-    offB.angle = Math.atan2(py - offB.y, px - offB.x);
-    world.police.units.push(new PC.CopUnit(null, offA, offA.x, offA.y));
-    world.police.units.push(new PC.CopUnit(null, offB, offB.x, offB.y));
+
+    // officers on foot, both on the ocean side of the player's car, out of the line of fire
+    var offA = new PC.Officer(cx + 104, laneS + 56);
+    offA.angle = Math.PI + 0.48;
+    var offB = new PC.Officer(cx - 92, laneS + 62);
+    offB.angle = Math.PI - 0.34;
+    var uA = new PC.CopUnit(null, offA, offA.x, offA.y);
+    var uB = new PC.CopUnit(null, offB, offB.x, offB.y);
+    uA.state = 'foot';
+    uB.state = 'foot';
+    world.police.units.push(uA);
+    world.police.units.push(uB);
+
     world.police.stars = 3;
     world.police.heat = 3;
     world.player.wanted = 3;
     world.police.sirenOn = true;
-    crowd(world, px + 260, py + 130, 7, 95);
-    world.shotCam = { x: px, y: py - 30, zoom: 0.92, allowHeat: true };
-    world.camera.zoom = 0.92;
-    world.camera.x = px;
-    world.camera.y = py - 30;
+    world.player.health = 58;
+    world.player.armour = 30;
+    crowd(world, cx - 60, roadY - 120, 8, 92);
+    world.shotCam = { x: cx + 34, y: laneS + 6, zoom: 1.34, allowHeat: true };
+    world.camera.zoom = 1.34;
+    world.camera.x = cx + 34;
+    world.camera.y = laneS + 6;
     world.hud.banner('WANTED', 'Three stars. Every cruiser on the strip is heading your way.');
     return true;
   };
