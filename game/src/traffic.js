@@ -1,115 +1,152 @@
-// traffic.js — the ambient city: spawning and recycling traffic cars that loop along
-// the road grid, and the pedestrians who scatter when a gun goes off nearby.
+/* Palm City — ambient traffic and parked cars. Every traffic car follows the grid: it drives
+   toward the next intersection on its lane, and at the junction picks straight or a turn. Cars
+   in front are avoided by easing off, so the streets keep moving without a stack of wrecks.
+   Parked cars line the curb lanes and the beach lots, waiting to be stolen. */
+(function (PC) {
+  'use strict';
 
-import { WORLD } from './config.js';
-import { makeCar, Ped } from './entities.js';
-import { steerTrafficCar, driveCar } from './vehicles.js';
-import { buildTrafficRoute } from './vehicles.js';
+  var C = PC.CONFIG, U = PC.util, V = PC.vehicles;
+  var HALF = C.ROAD / 2, LANE = C.LANE;
 
-const TRAFFIC_COLORS = ['#c8556f', '#4f9fb8', '#d8b25f', '#8a7bd8', '#d8d3e2', '#6f8f6a', '#b8484f', '#4a6fa8', '#c07a4a', '#9b6fb0'];
-
-export class CityTraffic {
-  constructor(city, rng) {
-    this.city = city;
-    this.rng = rng;
-    this.cars = [];
-    this.target = 22;
-    this.spawnTimer = 0;
+  function lanePoint(gx, gy, axis, dir) {
+    // A point in the correct lane approaching intersection (gx, gy) along `axis`.
+    var cx = gx * C.CELL, cy = gy * C.CELL;
+    if (axis === 'x') return { x: cx, y: cy + dir * LANE };
+    return { x: cx - dir * LANE, y: cy };
   }
 
-  spawn() {
-    const { city, rng } = this;
-    for (let attempt = 0; attempt < 40; attempt++) {
-      const vertical = rng.chance(0.5);
-      const car = makeCar({
-        color: rng.pick(TRAFFIC_COLORS),
-        kind: rng.chance(0.15) ? 'sport' : 'sedan',
-      });
-      car.w = 42;
-      car.h = 82;
-      // Pick a spot somewhere along a road, with a lane offset.
-      const lane = rng.chance(0.5) ? 1 : -1;
-      if (vertical) {
-        const rx = rng.pick(city.roadsX);
-        car.x = rx + lane * 26;
-        car.y = rng.float(260, city.height - 260);
-        car.angle = lane > 0 ? Math.PI / 2 : -Math.PI / 2;
-        car.traffic = { lane, dirX: 0, dirY: lane > 0 ? 1 : -1, nodeIndex: 0, route: [] };
-      } else {
-        const ry = rng.pick(city.roadsY);
-        car.y = ry + lane * 26;
-        car.x = rng.float(260, WORLD.sandEndX - 260);
-        car.angle = lane > 0 ? 0 : Math.PI;
-        car.traffic = { lane, dirX: lane > 0 ? 1 : -1, dirY: 0, nodeIndex: 0, route: [] };
-      }
-      car.driver = 'traffic';
-      // Reject if it spawns on top of another car.
-      let clear = true;
-      for (const other of this.cars) {
-        if (Math.hypot(other.x - car.x, other.y - car.y) < 120) {
-          clear = false;
-          break;
-        }
-      }
-      if (!clear) continue;
-      car.traffic.route = buildTrafficRoute(city, car, car.traffic);
-      car.traffic.target = car.traffic.route[0];
-      this.cars.push(car);
+  function makeTrafficCar(rng, gx, gy, axis, dir) {
+    var car = V.makeCar(0, 0, 0, { rng: rng });
+    car.traffic = true;
+    car.axis = axis;
+    car.dir = dir;
+    car.gx = gx; car.gy = gy;
+    var p = lanePoint(gx, gy, axis, dir);
+    car.x = p.x; car.y = p.y;
+    car.angle = axis === 'x' ? (dir > 0 ? 0 : Math.PI) : (dir > 0 ? Math.PI / 2 : -Math.PI / 2);
+    car.cruise = C.TRAFFIC.speed + (rng() - 0.5) * C.TRAFFIC.speedJitter;
+    car.speed = car.cruise * 0.6;
+    return car;
+  }
+
+  function spawnTraffic(world, rng) {
+    var tries = 0;
+    while (tries++ < 14) {
+      var gx = 1 + Math.floor(rng() * (C.GRID - 2));
+      var gy = 1 + Math.floor(rng() * (C.GRID - 2));
+      var axis = rng() < 0.5 ? 'x' : 'y';
+      var dir = rng() < 0.5 ? 1 : -1;
+      var p = lanePoint(gx, gy, axis, dir);
+      if (U.dist2(p.x, p.y, world.player.x, world.player.y) < 420 * 420) continue;
+      if (PC.city.collideCircle(world.city, p.x, p.y, 30)) continue;
+      var car = makeTrafficCar(rng, gx, gy, axis, dir);
+      world.traffic.push(car);
       return car;
     }
     return null;
   }
 
-  update(dt) {
-    this.spawnTimer -= dt;
-    if (this.cars.length < this.target && this.spawnTimer <= 0) {
-      this.spawn();
-      this.spawnTimer = 0.6;
+  function nextIntersection(car) {
+    if (car.axis === 'x') car.gx += car.dir;
+    else car.gy += car.dir;
+    if (car.gx < 0) car.gx = 0; if (car.gx > C.GRID) car.gx = C.GRID;
+    if (car.gy < 0) car.gy = 0; if (car.gy > C.GRID) car.gy = C.GRID;
+    // bounce back off the map edge
+    if (car.gx === 0 || car.gx === C.GRID) car.dir = car.axis === 'x' ? car.dir : car.dir;
+  }
+
+  function updateTrafficCar(car, dt, world, rng) {
+    if (car.driver === 'player') return;
+    if (car.police) return;
+
+    var target = lanePoint(car.gx, car.gy, car.axis, car.dir);
+    var d = U.dist(car.x, car.y, target.x, target.y);
+    if (d < 26) {
+      // at the junction: straight most of the time, else turn onto the crossing road
+      var newAxis = car.axis, newDir = car.dir;
+      if (rng() < 0.3) {
+        newAxis = car.axis === 'x' ? 'y' : 'x';
+        newDir = rng() < 0.5 ? 1 : -1;
+        car.axis = newAxis; car.dir = newDir;
+      }
+      nextIntersection(car);
+      if (car.gx <= 0 || car.gx >= C.GRID) { car.dir = -car.dir; car.gx = U.clamp(car.gx, 1, C.GRID - 1); }
+      if (car.gy <= 0 || car.gy >= C.GRID) { car.dir = -car.dir; car.gy = U.clamp(car.gy, 1, C.GRID - 1); }
+      target = lanePoint(car.gx, car.gy, car.axis, car.dir);
+      d = U.dist(car.x, car.y, target.x, target.y);
     }
 
-    for (const car of this.cars) {
-      if (car.driver !== 'traffic') continue;
-      const controls = steerTrafficCar(car, dt, this.city);
-      // Stop for a moment when something is right in front, so traffic doesn't pile through.
-      controls.throttle = this.throttleFor(car, controls.throttle);
-      driveCar(car, controls, dt, this.city);
-      car.hornTime = Math.max(0, car.hornTime - dt);
-    }
+    var wantAngle = Math.atan2(target.y - car.y, target.x - car.x);
+    var diff = U.angleDiff(car.angle, wantAngle);
 
-    // Recycle cars that wander off the map or get stuck in the sea.
-    for (let i = this.cars.length - 1; i >= 0; i--) {
-      const car = this.cars[i];
-      if (car.driver !== 'traffic') continue;
-      if (car.x < 120 || car.y < 120 || car.x > WORLD.sandEndX + 40 || car.y > WORLD.sandEndY + 40) {
-        this.cars.splice(i, 1);
+    // yield for a car directly ahead in the same lane
+    var slow = 1;
+    for (var i = 0; i < world.traffic.length; i++) {
+      var o = world.traffic[i];
+      if (o === car) continue;
+      var ahead = Math.cos(car.angle) * (o.x - car.x) + Math.sin(car.angle) * (o.y - car.y);
+      if (ahead > 0 && ahead < 62) {
+        var side = Math.abs(-Math.sin(car.angle) * (o.x - car.x) + Math.cos(car.angle) * (o.y - car.y));
+        if (side < 20) slow = 0.05;
       }
     }
+    // and for the player on foot in the road
+    var pAhead = Math.cos(car.angle) * (world.player.x - car.x) + Math.sin(car.angle) * (world.player.y - car.y);
+    if (pAhead > 0 && pAhead < 70) {
+      var pSide = Math.abs(-Math.sin(car.angle) * (world.player.x - car.x) + Math.cos(car.angle) * (world.player.y - car.y));
+      if (pSide < 24) slow = Math.min(slow, 0.02);
+    }
+
+    var wanted = car.cruise * slow;
+    var accel = wanted > car.speed ? C.CAR.accel * 0.6 : -C.CAR.brake;
+    car.speed = U.approach(car.speed, wanted, Math.abs(accel) * dt);
+    car.brake = wanted < car.speed - 4;
+
+    car.steer = U.angleDiff(0, diff) * 2.2;
+    car.angle += U.clamp(diff, -car.speed * dt / 26, car.speed * dt / 26);
+    car.x += Math.cos(car.angle) * car.speed * dt;
+    car.y += Math.sin(car.angle) * car.speed * dt;
+
+    // nudge a stuck car free
+    if (car.speed < 6) {
+      car.stuck = (car.stuck || 0) + dt;
+      if (car.stuck > 4) { car.stuck = 0; nextIntersection(car); }
+    } else car.stuck = 0;
   }
 
-  throttleFor(car, wanted) {
-    const fx = Math.cos(car.angle);
-    const fy = Math.sin(car.angle);
-    for (const other of this.cars) {
-      if (other === car) continue;
-      const dx = other.x - car.x;
-      const dy = other.y - car.y;
-      const ahead = dx * fx + dy * fy;
-      const side = Math.abs(-dx * fy + dy * fx);
-      if (ahead > 0 && ahead < 110 && side < 34) return -0.6;
+  /* Parked cars: a sprinkle along curb lanes and in the beach lot, a few already occupied. */
+  function populateParked(world, rng) {
+    var n = 0;
+    for (var i = 0; i < 150 && n < 40; i++) {
+      var gx = 1 + Math.floor(rng() * (C.GRID - 2));
+      var gy = 1 + Math.floor(rng() * (C.GRID - 2));
+      var axis = rng() < 0.5 ? 'x' : 'y';
+      var dir = rng() < 0.5 ? 1 : -1;
+      var side = rng() < 0.5 ? -1 : 1;
+      var cx = gx * C.CELL + (axis === 'x' ? side * (HALF + 46) : 0);
+      var cy = gy * C.CELL + (axis === 'y' ? side * (HALF + 46) : 0);
+      if (axis === 'x') cy = gy * C.CELL + side * (HALF + 14); else cx = gx * C.CELL + side * (HALF + 14);
+      var ang = axis === 'x' ? (side > 0 ? Math.PI : 0) : (side > 0 ? -Math.PI / 2 : Math.PI / 2);
+      if (PC.city.collideCircle(world.city, cx, cy, 26)) continue;
+      if (U.dist2(cx, cy, world.player.x, world.player.y) < 130 * 130) continue;
+      var car = V.makeCar(cx, cy, ang, { rng: rng, parked: true });
+      car.occupied = rng() < 0.12;
+      world.parked.push(car); n++;
     }
-    // Also yield to the player's car.
-    return wanted;
+    // the beach parking row, facing the water
+    for (var b = 0; b < 12; b++) {
+      var bx = C.CITY_W * 0.18 + b * 74, by = C.CITY_H + 42;
+      var bc = V.makeCar(bx, by, Math.PI / 2, { rng: rng, parked: true });
+      bc.occupied = rng() < 0.1;
+      world.parked.push(bc);
+    }
+    world.trafficSpots = world.traffic.length;
   }
-}
 
-// Pedestrians who hear gunfire run for a bit. main.js calls this from combat.
-export function scarePeds(peds, x, y, radius = 420) {
-  for (const ped of peds) {
-    if (ped.state !== 'walk') continue;
-    const d = Math.hypot(ped.x - x, ped.y - y);
-    if (d < radius) {
-      ped.state = 'flee';
-      ped.fleeTimer = 3 + Math.random() * 3;
-    }
-  }
-}
+  PC.traffic = {
+    spawn: spawnTraffic,
+    update: updateTrafficCar,
+    populateParked: populateParked,
+    lanePoint: lanePoint
+  };
+})(window.PC = window.PC || {});
