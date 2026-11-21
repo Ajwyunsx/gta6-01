@@ -141,8 +141,9 @@
       for (const f of fx.flashes) {
         const k = f.life / f.max;
         const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, 26);
-        g.addColorStop(0, `rgba(255,238,190,${0.85 * k})`);
-        g.addColorStop(1, 'rgba(255,180,90,0)');
+        g.addColorStop(0, `rgba(255,246,214,${0.9 * k})`);
+        g.addColorStop(0.4, `rgba(255,206,120,${0.42 * k})`);
+        g.addColorStop(1, 'rgba(255,170,80,0)');
         ctx.fillStyle = g;
         ctx.beginPath();
         ctx.arc(f.x, f.y, 26, 0, Math.PI * 2);

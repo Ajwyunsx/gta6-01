@@ -114,6 +114,10 @@
         continue;
       }
 
+      // A staged still holds the cruisers exactly where the scene put them; without this
+      // they drive themselves out of frame during the settle and the shot is a random crop.
+      if (c.staged) continue;
+
       // Chase: drive toward the player, braking when close so they can bail out.
       const dx = player.x - c.x;
       const dy = player.y - c.y;

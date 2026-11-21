@@ -162,7 +162,7 @@
     const sx = mid * PC.CELL;                // junction centre, x
     const sy = (mid + 3) * PC.CELL;          // junction centre, y
     place(state, sx, sy + 16, -Math.PI / 2 + 0.04);
-    state.camera.y -= 6;                    // lean the frame north, into the ambush
+    state.camera.y -= 10;                    // lean the frame north, into the ambush
 
     state.mode = 'playing';
     state.player.cash = 3480;
@@ -184,11 +184,11 @@
 
     // Cruiser one: stopped dead on the north approach, headlights full on the player.
     state.cruisers.length = 0;
-    const c1 = PC.Police.makeCruiser(sx - 34, sy - 118, Math.PI / 2 + 0.02);
+    const c1 = PC.Police.makeCruiser(sx - 36, sy - 96, Math.PI / 2 + 0.02);
     c1.lightPhase = 0.4;
     c1.staged = true;
     // Cruiser two: slewed in from the east, broadside across the far side of the junction.
-    const c2 = PC.Police.makeCruiser(sx + 148, sy + 44, Math.PI - 0.16);
+    const c2 = PC.Police.makeCruiser(sx + 150, sy + 8, Math.PI - 0.16);
     c2.lightPhase = 1.2;
     c2.staged = true;
     state.cruisers.push(c1, c2);
@@ -201,15 +201,16 @@
 
     // Officers out of both cars, guns up.
     state.hostiles.length = 0;
-    const cop1 = PC.Police.makeOfficer(sx + 62, sy - 44, Math.PI / 2 + 0.26);
-    const cop2 = PC.Police.makeOfficer(sx - 74, sy - 26, Math.PI / 2 - 0.30);
-    const cop3 = PC.Police.makeOfficer(sx + 2, sy - 88, Math.PI / 2 + 0.04);
+    const cop1 = PC.Police.makeOfficer(sx + 54, sy - 36, Math.PI / 2 + 0.26);
+    const cop2 = PC.Police.makeOfficer(sx - 58, sy - 18, Math.PI / 2 - 0.30);
+    const cop3 = PC.Police.makeOfficer(sx - 4, sy - 74, Math.PI / 2 + 0.04);
     state.hostiles.push(cop1, cop2, cop3);
 
     // The exchange, frozen a frame after the trigger.
-    state.effects.muzzle(state.player.x + 2, state.player.y - 16);
+    state.effects.muzzle(state.player.x + 1, state.player.y - 26);
     state.effects.burst(sx + 4, sy - 56, 'spark', 11, 0.9);
     state.effects.burst(cop1.x + 5, cop1.y - 4, 'spark', 3, 0.5);
+    state.effects.muzzle(cop2.x, cop2.y - 10);
     state.effects.addShake(5);
     state.bullets.push(PC.Combat.makeBullet(state.player.x + 2, state.player.y - 22, -Math.PI / 2 + 0.02, 'player', 26));
     state.bullets.push(PC.Combat.makeBullet(cop1.x, cop1.y - 6, Math.PI / 2 - 0.16, 'police', 8));
@@ -301,7 +302,7 @@
     state.camera.w = W;
     state.camera.h = H;
     state.shot = n;
-    state.camera.zoom = n === 1 ? 1.24 : n === 3 ? 1.95 : 1.55;
+    state.camera.zoom = n === 1 ? 1.24 : n === 3 ? 2.05 : 1.55;
     if (n === 1) cover(state);
     else if (n === 2) onFoot(state);
     else if (n === 3) police(state);
@@ -316,10 +317,12 @@
   function tick(state, dt) {
     if (state.missions.state === 'active' && state.shot === 4) state.missions.timer += dt * 0.02;
     if (state.shot !== 3) return;
+    // Hold the light bars on a fixed phase: a still caught mid-crossfade reads as a pink car.
+    for (const c of state.cruisers) c.lightPhase = 0.12;
 
     const fx = state.effects;
     const p = state.player;
-    if (fx.flashes.length === 0) fx.muzzle(p.x + 2, p.y - 16);
+    if (fx.flashes.length === 0) fx.muzzle(p.x + 1, p.y - 26);
     if (fx.particles.length < 40) fx.burst(p.x + 2, p.y - 56, 'spark', 7, 0.8);
     if (state.bullets.length < 3) {
       state.bullets.push(PC.Combat.makeBullet(p.x + 2, p.y - 22, -Math.PI / 2 + 0.02, 'player', 26));

@@ -571,6 +571,21 @@
     const l = car.length / 2;
     const w = car.width / 2;
 
+    // Police light bar: the ground bloom goes down BEFORE the body. Painted after it, the
+    // wash tints the whole car pink and it stops reading as a white-and-navy cruiser.
+    const phase = Math.floor(car.lightPhase * 2.4) % 2 === 0;
+    if (car.driver === 'police') {
+      const glowColour = phase ? '255,78,78' : '80,120,255';
+      const beam = ctx.createRadialGradient(-4, 0, car.width * 0.2, -4, 0, 78);
+      beam.addColorStop(0, `rgba(${glowColour},0.30)`);
+      beam.addColorStop(0.45, `rgba(${glowColour},0.09)`);
+      beam.addColorStop(1, `rgba(${glowColour},0)`);
+      ctx.fillStyle = beam;
+      ctx.beginPath();
+      ctx.arc(-4, 0, 78, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     // Tyres.
     ctx.fillStyle = '#191b20';
     ctx.fillRect(-l + 5, -w - 2.5, 13, 4.5);
@@ -588,39 +603,28 @@
     roundRect(ctx, -l + 1, -w + 1, car.length - 2, car.width - 2, 5);
     ctx.stroke();
 
-    // Cabin.
-    ctx.fillStyle = car.driver === 'police' ? 'rgba(30,40,58,0.62)' : 'rgba(22,28,38,0.45)';
-    roundRect(ctx, -l * 0.3, -w * 0.74, car.length * 0.46, car.width * 1.48 * 0.74, 4);
+    // Cabin: a centred roof panel, a windscreen ahead of it and a rear window behind.
+    const cabinH = car.width * 0.66;
+    ctx.fillStyle = car.driver === 'police' ? '#1d2431' : 'rgba(22,28,38,0.45)';
+    roundRect(ctx, -l * 0.26, -cabinH / 2, car.length * 0.44, cabinH, 4);
     ctx.fill();
-    // Windscreen.
-    ctx.fillStyle = 'rgba(198,232,244,0.62)';
-    roundRect(ctx, l * 0.14, -w * 0.62, 8, car.width * 0.62, 2);
+    ctx.fillStyle = 'rgba(198,232,244,0.58)';
+    roundRect(ctx, l * 0.2, -cabinH * 0.44, 7, cabinH * 0.88, 2);
+    ctx.fill();
+    roundRect(ctx, -l * 0.34, -cabinH * 0.4, 6, cabinH * 0.8, 2);
     ctx.fill();
 
     if (car.driver === 'police') {
-      // Livery: dark front doors, a white door panel with a badge, and a light bar.
-      ctx.fillStyle = '#2a3a5e';
+      // Livery: navy front doors, a white door panel with a badge, and a light bar.
+      ctx.fillStyle = '#22314f';
       ctx.fillRect(-l * 0.16, -w, car.length * 0.26, car.width * 0.22);
       ctx.fillRect(-l * 0.16, w - car.width * 0.22, car.length * 0.26, car.width * 0.22);
-      ctx.fillStyle = '#e8eef8';
+      ctx.fillStyle = '#f4f7fc';
       ctx.fillRect(-l * 0.16, -w + car.width * 0.24, car.length * 0.26, car.width * 0.16);
       ctx.fillRect(-l * 0.16, w - car.width * 0.40, car.length * 0.26, car.width * 0.16);
 
-      // The light bar: two lamps, one lit, with a beam thrown onto the tarmac beside the car.
-      const phase = Math.floor(car.lightPhase * 2.4) % 2 === 0;
-      const glowColour = phase ? '255,78,78' : '80,120,255';
-      // The bloom is deliberately tight: a wide wash turns the whole street lavender
-      // and stops reading as a light bar.
-      const beam = ctx.createRadialGradient(-4, 0, car.width * 0.25, -4, 0, 96);
-      beam.addColorStop(0, `rgba(${glowColour},0.34)`);
-      beam.addColorStop(0.5, `rgba(${glowColour},0.11)`);
-      beam.addColorStop(1, `rgba(${glowColour},0)`);
-      ctx.fillStyle = beam;
-      ctx.beginPath();
-      ctx.arc(-4, 0, 96, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#161a22';
+      // The light bar housing sits on the roof, two lamps, one lit.
+      ctx.fillStyle = '#0d1118';
       roundRect(ctx, -9, -w * 0.94, 12, w * 1.88, 2);
       ctx.fill();
       ctx.fillStyle = phase ? '#ff5252' : '#3b4a6a';
@@ -753,16 +757,26 @@
   }
 
   function drawBullets(ctx, state) {
-    ctx.strokeStyle = 'rgba(255,226,150,0.9)';
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
+    // Tracers: a hot core inside a wider, softer glow, so a round reads as a streak of
+    // light rather than a one-pixel scratch.
     for (const b of state.bullets) {
-      const len = b.from === 'police' ? 13 : 17;
+      const len = b.from === 'police' ? 16 : 22;
       const a = Math.atan2(b.vy, b.vx);
+      const tx = b.x - Math.cos(a) * len;
+      const ty = b.y - Math.sin(a) * len;
+      ctx.strokeStyle = 'rgba(255,196,96,0.22)';
+      ctx.lineWidth = 4.2;
+      ctx.beginPath();
       ctx.moveTo(b.x, b.y);
-      ctx.lineTo(b.x - Math.cos(a) * len, b.y - Math.sin(a) * len);
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,240,190,0.95)';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(b.x, b.y);
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
     }
-    ctx.stroke();
   }
 
   // ---- frame -------------------------------------------------------------
