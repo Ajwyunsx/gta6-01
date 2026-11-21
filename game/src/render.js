@@ -485,8 +485,10 @@
     ctx.beginPath();
     ctx.ellipse(0, 0, a.radius * 0.9, a.radius * 1.04, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = a.isPlayer ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.22)';
-    ctx.lineWidth = a.isPlayer ? 1.8 : 1;
+    // The player wears a light shirt: an ink outline, not a white one, keeps him crisp
+    // against pale pavement without turning into a glowing blob.
+    ctx.strokeStyle = a.isPlayer ? 'rgba(24,30,46,0.72)' : 'rgba(0,0,0,0.22)';
+    ctx.lineWidth = a.isPlayer ? 2.1 : 1;
     ctx.stroke();
     // Arms: two small caps at the shoulders, swinging with the gait.
     ctx.fillStyle = a.shirt;
@@ -832,15 +834,15 @@
     if (!state.player.inCar) {
       const p = state.player;
       const pulse = 0.55 + Math.sin(state.time * 2.4) * 0.12;
-      ctx.strokeStyle = `rgba(255,255,255,${0.34 * pulse})`;
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = `rgba(255,214,130,${0.30 * pulse})`;
+      ctx.lineWidth = 1.6;
       ctx.beginPath();
-      ctx.arc(p.x, p.y + 3, 17, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y + 3, 15, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.strokeStyle = `rgba(255,255,255,${0.16 * pulse})`;
-      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = `rgba(255,214,130,${0.12 * pulse})`;
+      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.arc(p.x, p.y + 3, 23, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y + 3, 21, 0, Math.PI * 2);
       ctx.stroke();
     }
 
@@ -867,12 +869,23 @@
 
     ctx.restore();
 
-    // Grade: a warm wash and a vignette over the whole frame.
-    ctx.fillStyle = 'rgba(255,150,90,0.055)';
+    // Grade: late sun from the north-west, then a warm vignette. The sun wash is a big
+    // off-canvas radial, so the top-left of the frame glows and the far corner cools off
+    // instead of the whole image sitting under a sepia filter.
+    const sun = ctx.createRadialGradient(-W * 0.12, -H * 0.2, H * 0.1, -W * 0.12, -H * 0.2, W * 1.05);
+    sun.addColorStop(0, 'rgba(255,186,120,0.17)');
+    sun.addColorStop(0.42, 'rgba(255,168,110,0.075)');
+    sun.addColorStop(1, 'rgba(255,150,96,0.015)');
+    ctx.fillStyle = sun;
     ctx.fillRect(0, 0, W, H);
-    const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.34, W / 2, H / 2, H * 0.95);
+    const shade = ctx.createRadialGradient(W * 1.05, H * 1.15, H * 0.1, W * 1.05, H * 1.15, W * 0.85);
+    shade.addColorStop(0, 'rgba(96,104,150,0.12)');
+    shade.addColorStop(1, 'rgba(96,104,150,0)');
+    ctx.fillStyle = shade;
+    ctx.fillRect(0, 0, W, H);
+    const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.36, W / 2, H / 2, H * 0.98);
     vg.addColorStop(0, 'rgba(0,0,0,0)');
-    vg.addColorStop(1, 'rgba(14,10,24,0.44)');
+    vg.addColorStop(1, 'rgba(30,16,26,0.34)');
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, W, H);
 

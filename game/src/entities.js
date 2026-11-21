@@ -61,7 +61,7 @@
     p.ammo = 120;
     p.fireCooldown = 0;
     p.breath = 0;
-    p.shirt = '#ffffff';
+    p.shirt = '#eef2f8';
     p.hair = '#2b2018';
     return p;
   }

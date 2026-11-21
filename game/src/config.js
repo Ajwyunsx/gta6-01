@@ -82,12 +82,12 @@
   // ---- look ---------------------------------------------------------------
   // Late afternoon on the coast: warm key light, violet shadows, sea haze.
   PC.PALETTE = {
-    asphalt: '#5c626c',
-    asphaltWorn: '#666c76',
+    asphalt: '#4f5158',
+    asphaltWorn: '#5a5c63',
     lane: '#e9dfc4',
     kerb: '#cfc4ad',
-    pavement: '#d9cdb6',
-    pavementLine: '#c6b9a0',
+    pavement: '#dccfb4',
+    pavementLine: '#c8b99b',
     sand: '#ead6a8',
     sandDark: '#dcc492',
     water: '#2b7f97',
@@ -95,8 +95,8 @@
     foam: '#e8f6f4',
     grass: '#7fae6a',
     grassDark: '#6b9a58',
-    lot: '#b9b3a5',
-    shadow: 'rgba(28,26,48,0.26)',
+    lot: '#bcb3a2',
+    shadow: 'rgba(44,28,52,0.24)',
     sky: '#f6d9b0',
     hud: '#f7efe0',
     hudDim: 'rgba(247,239,224,0.55)',
