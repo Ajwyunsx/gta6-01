@@ -1,244 +1,120 @@
-// traffic.js — cars that drive the city by themselves: they hold their lane, brake for
-// whatever is in front of them, take a random turn at an intersection (drawn as a quadratic
-// bezier so the turn is smooth) and are recycled when they leave the player's neighbourhood.
-//
-// A traffic car is described by three things and nothing else: the axis it travels on
-// ('v' for an avenue, 'h' for a street), its direction (+1 / -1) and the index of the road
-// it is on. Position along the axis lives on the car itself.
-(function () {
+// Palm City — lane traffic: cars that keep to their side of the road, turn at junctions,
+// brake for whatever is ahead of them, and can be stolen by the player.
+(function (global) {
   'use strict';
-  var PC = window.PC;
-  var CFG = PC.CFG;
-  var U = PC.U;
 
-  var LANE = 26;       // lane centre offset from the avenue's middle
-  var REACH = 52;      // how far past the junction a turn exits
-  var LOOK = 138;      // braking look-ahead
+  const PC = global.PC;
+  const T = PC.TRAFFIC;
 
-  function laneOffset(axis, dir) {
-    // right-hand traffic: on a north-south avenue, northbound keeps to +x
-    if (axis === 'v') return dir > 0 ? LANE : -LANE;
-    return dir > 0 ? -LANE : LANE;
-  }
+  const DIRS = [
+    { dx: 0, dy: -1, angle: -Math.PI / 2 },  // north
+    { dx: 1, dy: 0, angle: 0 },              // east
+    { dx: 0, dy: 1, angle: Math.PI / 2 },    // south
+    { dx: -1, dy: 0, angle: Math.PI },       // west
+  ];
 
-  function roadCentre(k) {
-    return k * CFG.CELL + CFG.ROAD / 2;
-  }
-
-  function TrafficCar(car, axis, dir, line) {
-    this.car = car;
-    this.axis = axis;
-    this.dir = dir;
-    this.line = line;
-    this.turn = null;
-    this.turnT = 0;
-    this.turnLen = 1;
-    this.lastJunction = -99;
-    this.cruise = U.randRange(car.rng, 170, 290);
-    this.patience = 0;
-    this.placeOnLane();
-    car.angle = axis === 'v' ? (dir > 0 ? Math.PI / 2 : -Math.PI / 2) : (dir > 0 ? 0 : Math.PI);
-    car.vx = Math.cos(car.angle) * this.cruise;
-    car.vy = Math.sin(car.angle) * this.cruise;
-  }
-
-  TrafficCar.prototype.placeOnLane = function () {
-    var car = this.car;
-    if (this.axis === 'v') car.x = roadCentre(this.line) + laneOffset('v', this.dir);
-    else car.y = roadCentre(this.line) + laneOffset('h', this.dir);
-  };
-
-  TrafficCar.prototype.forward = function () {
-    if (this.axis === 'v') return { x: 0, y: this.dir };
-    return { x: this.dir, y: 0 };
-  };
-
-  // Look for the next junction. If it is close and we roll a turn, start one.
-  TrafficCar.prototype.planIntersection = function () {
-    var car = this.car;
-    var along = this.axis === 'v' ? car.y : car.x;
-    var j = Math.round((along - CFG.ROAD / 2) / CFG.CELL);
-    if (j < 0 || j > CFG.GRID) return;
-    if (j === this.lastJunction) return;
-    var gap = (roadCentre(j) - along) * this.dir;
-    if (gap < -8 || gap > REACH + 74) return;
-    this.lastJunction = j;
-    if (car.rng() > 0.44) return;   // most cars go straight on
-
-    var right = car.rng() < 0.5;
-    var nAxis = this.axis === 'v' ? 'h' : 'v';
-    // Turning right when heading +, left when heading -, and the other way round the other way.
-    var nDir;
-    if (this.axis === 'v') nDir = this.dir > 0 ? (right ? 1 : -1) : (right ? -1 : 1);
-    else nDir = this.dir > 0 ? (right ? -1 : 1) : (right ? 1 : -1);
-
-    var ix = this.axis === 'v' ? car.x : roadCentre(j);
-    var iy = this.axis === 'v' ? roadCentre(j) : car.y;
-
-    var ex, ey, nLine;
-    if (nAxis === 'h') {
-      nLine = j;
-      ex = ix + nDir * REACH;
-      ey = roadCentre(nLine) + laneOffset('h', nDir);
-    } else {
-      nLine = j;
-      ey = iy + nDir * REACH;
-      ex = roadCentre(nLine) + laneOffset('v', nDir);
-    }
-    // control point sits on the inside corner of the junction
-    var cx = U.lerp(ix, ex, 0.62);
-    var cy = U.lerp(iy, ey, 0.62);
-    var span = Math.max(40, Math.hypot(ex - ix, ey - iy));
-    this.turn = {
-      sx: ix, sy: iy, cx: cx, cy: cy, ex: ex, ey: ey,
-      nAxis: nAxis, nDir: nDir, nLine: nLine,
+  function laneTarget(car, dir) {
+    // Aim at the lane centre on the right-hand side of the carriageway.
+    return {
+      x: car.x + dir.dx * 120 - dir.dy * T.laneOffset,
+      y: car.y + dir.dy * 120 + dir.dx * T.laneOffset,
     };
-    this.turnLen = U.clamp(span / Math.max(90, car.speed), 0.4, 2.2);
-    this.turnT = 0;
-  };
-
-  TrafficCar.prototype.steerPath = function (dt) {
-    var car = this.car;
-    var t = (this.turnT = Math.min(1, this.turnT + dt / this.turnLen));
-    var u = 1 - t;
-    var px = u * u * this.turn.sx + 2 * u * t * this.turn.cx + t * t * this.turn.ex;
-    var py = u * u * this.turn.sy + 2 * u * t * this.turn.cy + t * t * this.turn.ey;
-    var dx = 2 * u * (this.turn.cx - this.turn.sx) + 2 * t * (this.turn.ex - this.turn.cx);
-    var dy = 2 * u * (this.turn.cy - this.turn.sy) + 2 * t * (this.turn.ey - this.turn.cy);
-    car.vx = (px - car.x) / Math.max(0.0001, dt);
-    car.vy = (py - car.y) / Math.max(0.0001, dt);
-    car.x = px;
-    car.y = py;
-    car.angle = Math.atan2(dy, dx);
-    car.speed = Math.hypot(car.vx, car.vy);
-    if (t >= 1) {
-      this.axis = this.turn.nAxis;
-      this.dir = this.turn.nDir;
-      this.line = this.turn.nLine;
-      this.lastJunction = Math.round(((this.axis === 'v' ? car.y : car.x) - CFG.ROAD / 2) / CFG.CELL);
-      this.turn = null;
-      var f = this.forward();
-      car.vx = f.x * this.cruise;
-      car.vy = f.y * this.cruise;
-      car.angle = Math.atan2(f.y, f.x);
-      car.speed = this.cruise;
-    }
-  };
-
-  TrafficCar.prototype.update = function (dt, world) {
-    var car = this.car;
-    var city = world.city;
-
-    if (this.turn) {
-      this.steerPath(dt);
-      car.occupied = true;
-      car.driver = 'traffic';
-      return;
-    }
-
-    this.planIntersection();
-    var f = this.forward();
-
-    // What is in the way?
-    var blocked = 0;
-    var playerCar = world.playerCar();
-    if (playerCar) {
-      var rel = (playerCar.x - car.x) * f.x + (playerCar.y - car.y) * f.y;
-      var side = Math.abs(-(playerCar.x - car.x) * f.y + (playerCar.y - car.y) * f.x);
-      if (rel > 6 && rel < LOOK + 46 && side < 48) blocked = Math.max(blocked, 0.9 - rel / (LOOK + 46));
-    }
-    var others = world.traffic.list;
-    for (var k = 0; k < others.length; k++) {
-      var o = others[k];
-      if (o === this) continue;
-      var oc = o.car;
-      var rel2 = (oc.x - car.x) * f.x + (oc.y - car.y) * f.y;
-      if (rel2 <= 0 || rel2 > LOOK) continue;
-      var side2 = Math.abs(-(oc.x - car.x) * f.y + (oc.y - car.y) * f.x);
-      if (side2 > 44) continue;
-      blocked = Math.max(blocked, 1 - rel2 / LOOK);
-    }
-    var lookX = car.x + f.x * LOOK * 0.45;
-    var lookY = car.y + f.y * LOOK * 0.45;
-    if (world.peds.nearest(lookX, lookY, 42, true)) blocked = Math.max(blocked, 0.85);
-    if (world.player.wanted > 0 && U.dist(car.x, car.y, world.player.x, world.player.y) < 360) {
-      blocked = Math.max(blocked, 0.35);
-    }
-
-    if (blocked > 0.2) {
-      this.patience += dt;
-      car.drive(dt, { brake: true }, city);
-    } else {
-      this.patience = 0;
-      var want = U.clamp((this.cruise - car.speed) / 220, 0.2, 1);
-      car.drive(dt, { throttle: want }, city);
-    }
-    car.occupied = true;
-    car.driver = 'traffic';
-  };
-
-  // ---- manager ---------------------------------------------------------------
-  function TrafficManager(city, carManager, rng) {
-    this.city = city;
-    this.cars = carManager;
-    this.rng = rng;
-    this.list = [];
-    this.spawnClock = 0;
   }
 
-  TrafficManager.prototype.spawnOne = function (world) {
-    var axis = this.rng() < 0.5 ? 'v' : 'h';
-    var dir = this.rng() < 0.5 ? 1 : -1;
-    var line = Math.floor(this.rng() * (CFG.GRID + 1));
-    var along = this.rng() * (axis === 'v' ? CFG.CITY_H : CFG.CITY_W);
-    var x = axis === 'v' ? roadCentre(line) + laneOffset('v', dir) : along;
-    var y = axis === 'v' ? along : roadCentre(line) + laneOffset('h', dir);
-    if (U.dist(x, y, world.player.x, world.player.y) < 660) return null;
-    if (this.city.hitBuilding(x, y, 30)) return null;
-    var model = PC.CAR_MODELS[Math.floor(this.rng() * PC.CAR_MODELS.length)];
-    var car = new PC.Car(x, y, 0, model, this.rng);
+  function makeTrafficCar(rand, city) {
+    const horizontal = rand.chance(0.5);
+    const line = rand.int(0, PC.GRID - 1);
+    const dirIndex = horizontal ? (rand.chance(0.5) ? 1 : 3) : rand.chance(0.5) ? 2 : 0;
+    const along = rand.range(PC.CELL * 1.5, PC.WORLD - PC.CELL * 1.5);
+    const dir = DIRS[dirIndex];
+    const x = horizontal ? along : line * PC.CELL + PC.CELL / 2 - dir.dy * T.laneOffset;
+    const y = horizontal ? line * PC.CELL + PC.CELL / 2 - dir.dx * T.laneOffset : along;
+    const car = PC.Vehicles.makeCar(x, y, dir.angle, rand.pick(PC.CAR_COLOURS));
     car.driver = 'traffic';
-    car.headlights = Math.floor(this.rng() * 2);
-    this.cars.list.push(car);
-    var t = new TrafficCar(car, axis, dir, line);
-    this.list.push(t);
-    return t;
-  };
+    car.occupied = true;
+    car.dir = dir;
+    car.laneLine = line;
+    car.cruise = T.speed * rand.range(0.8, 1.25);
+    car.turnCooldown = rand.range(3, 9);
+    return car;
+  }
 
-  TrafficManager.prototype.update = function (dt, world) {
-    this.spawnClock -= dt;
-    if (this.spawnClock <= 0) {
-      if (this.list.length < CFG.tuning.trafficTarget) this.spawnOne(world);
-      this.spawnClock = 0.5;
+  function spawnTraffic(city, count) {
+    const rand = PC.rng(city.seed ^ 0x51ed270b);
+    const cars = [];
+    for (let i = 0; i < count; i++) cars.push(makeTrafficCar(rand, city));
+    return cars;
+  }
+
+  /** Is a slower body in front of this car, within braking distance of its lane? */
+  function blockedAhead(car, others) {
+    const fx = Math.cos(car.angle);
+    const fy = Math.sin(car.angle);
+    for (const o of others) {
+      if (o === car) continue;
+      const dx = o.x - car.x;
+      const dy = o.y - car.y;
+      const ahead = dx * fx + dy * fy;
+      if (ahead <= 0 || ahead > T.slowRadius) continue;
+      const side = Math.abs(dx * -fy + dy * fx);
+      if (side < 26) return true;
     }
-    for (var k = this.list.length - 1; k >= 0; k--) {
-      var t = this.list[k];
-      var idx = this.cars.list.indexOf(t.car);
-      if (t.car.health <= 0) {
-        world.effects.burst(t.car.x, t.car.y, '#ffb347', 16);
-        if (idx >= 0) this.cars.list.splice(idx, 1);
-        this.list.splice(k, 1);
-        continue;
+    return false;
+  }
+
+  /**
+   * One traffic step: steer toward the lane centre, keep a cruise speed, brake for the car
+   * ahead, and occasionally pick a new direction at a junction.
+   */
+  function updateTraffic(car, cars, dt, city) {
+    if (car.driver !== 'traffic') return;
+
+    car.turnCooldown -= dt;
+    if (car.turnCooldown <= 0) {
+      const mx = car.x % PC.CELL;
+      const my = car.y % PC.CELL;
+      const atJunction =
+        (mx < PC.ROAD * 0.7 || mx > PC.CELL - PC.ROAD * 0.7) &&
+        (my < PC.ROAD * 0.7 || my > PC.CELL - PC.ROAD * 0.7);
+      if (atJunction && Math.random() < T.turnChance) {
+        car.dir = DIRS[(DIRS.indexOf(car.dir) + (Math.random() < 0.5 ? 1 : 3)) % 4];
+        car.angle = car.dir.angle;
       }
-      if (U.dist(t.car.x, t.car.y, world.player.x, world.player.y) > 2500) {
-        if (idx >= 0) this.cars.list.splice(idx, 1);
-        this.list.splice(k, 1);
-        continue;
-      }
-      t.update(dt, world);
+      car.turnCooldown = 2.5 + Math.random() * 5;
     }
-  };
 
-  TrafficManager.prototype.clear = function () {
-    for (var k = 0; k < this.list.length; k++) {
-      var i = this.cars.list.indexOf(this.list[k].car);
-      if (i >= 0) this.cars.list.splice(i, 1);
+    const target = laneTarget(car, car.dir);
+    const want = Math.atan2(target.y - car.y, target.x - car.x);
+    const diff = PC.angleDiff(car.angle, want);
+    const steer = PC.clamp(diff * 1.6, -1, 1);
+
+    const blocked = blockedAhead(car, cars);
+    let throttle = 1;
+    if (blocked && car.speed > 30) throttle = -0.6;
+    else if (blocked) throttle = 0;
+
+    // Keep back from the pavement: steer home if we drift onto it.
+    PC.Vehicles.drive(car, throttle, steer, false, dt);
+    PC.Vehicles.collideWithCity(car, city);
+
+    // Recycle a car that wanders off the grid or gets stuck on the sand.
+    if (car.x < 40 || car.x > PC.WORLD - 40 || car.y < 40 || car.y > city.beachTop - 40) {
+      respawnTraffic(car, city);
     }
-    this.list.length = 0;
-  };
+  }
 
-  PC.TrafficCar = TrafficCar;
-  PC.TrafficManager = TrafficManager;
-  PC.laneOffset = laneOffset;
-  PC.roadCentre = roadCentre;
-})();
+  function respawnTraffic(car, city) {
+    const line = Math.floor(Math.random() * (PC.GRID - 1));
+    const dir = DIRS[(Math.random() * 4) | 0];
+    car.x = line * PC.CELL + PC.CELL / 2 - dir.dy * T.laneOffset;
+    car.y = Math.min(PC.CELL / 2 - dir.dx * T.laneOffset, (city ? city.beachTop : PC.WORLD) - 80);
+    car.angle = dir.angle;
+    car.dir = dir;
+    car.speed = 0;
+    car.vx = 0;
+    car.vy = 0;
+    car.laneLine = line;
+  }
+
+  PC.Traffic = { spawnTraffic, updateTraffic, respawnTraffic, DIRS };
+})(window);
