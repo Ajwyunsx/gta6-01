@@ -90,13 +90,7 @@
   }
 
   function drawBackdrop(ctx, state, t, alpha) {
-    // the world is behind the title only while a game is loaded; otherwise a painted sky
-    if (state && state.world) {
-      PC.render.draw(state.renderer, state.world, t);
-      ctx.fillStyle = 'rgba(24,16,10,' + alpha + ')';
-      ctx.fillRect(0, 0, C.VW, C.VH);
-      return;
-    }
+    // a painted sunset behind the title: the city is what you are about to step into
     var g = ctx.createLinearGradient(0, 0, 0, C.VH);
     g.addColorStop(0, '#f5c98a');
     g.addColorStop(0.4, '#e8a87c');
@@ -109,6 +103,17 @@
     sun.addColorStop(1, 'rgba(255,200,120,0)');
     ctx.fillStyle = sun;
     ctx.beginPath(); ctx.arc(C.VW / 2, 300, 320, 0, 6.283); ctx.fill();
+    // sea band
+    var sea = ctx.createLinearGradient(0, C.VH - 190, 0, C.VH);
+    sea.addColorStop(0, '#2b8fa3');
+    sea.addColorStop(1, '#17515f');
+    ctx.fillStyle = sea;
+    ctx.fillRect(0, C.VH - 190, C.VW, 190);
+    ctx.fillStyle = 'rgba(255,240,200,0.35)';
+    for (var i = 0; i < 26; i++) {
+      var wy = C.VH - 186 + i * 7;
+      ctx.fillRect(0, wy, C.VW, 1.4);
+    }
   }
 
   function drawSkyline(ctx, t) {

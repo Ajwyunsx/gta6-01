@@ -117,7 +117,7 @@
         world.audio.startEngine();
         world.audio.setEngine(car.speed, world.input.keys.up);
       }
-      world.camera.targetZoom = 0.86;
+      world.camera.targetZoom = 1.04;
     } else {
       PC.entities.updatePlayer(pl, world.input, dt, world);
       if (world.input.mouse.down && !world.input.mouse.wasDown) {
@@ -126,7 +126,7 @@
       if (world.input.mouse.down && pl.fireTimer <= 0) PC.combat.tryShoot(pl, world);
       if (world.input.pressed('reload')) PC.combat.startReload(pl, world);
       if (world.audio.ready) world.audio.stopEngine();
-      world.camera.targetZoom = 1;
+      world.camera.targetZoom = 1.24;
     }
     world.input.mouse.wasDown = world.input.mouse.down;
 

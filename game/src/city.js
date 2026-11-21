@@ -159,10 +159,40 @@
   }
 
   function buildBeach(city, rng) {
+    // boardwalk railing, towels, balls, surf racks, a lifeguard tower and two beach kiosks
+    city.beachSet = { towels: [], balls: [], boards: [], towers: [], kiosks: [], nets: [], rocks: [] };
+    var B = city.beachSet;
+    for (var ti = 0; ti < 44; ti++) {
+      B.towels.push({
+        x: 40 + rng() * (CITY_W - 80), y: CITY_H + 128 + rng() * (C.BEACH_H - 240),
+        a: (rng() - 0.5) * 0.8, color: U.pick(rng, ['#e4572e', '#f2c14e', '#2a9d8f', '#e76f51', '#7d5ba6', '#f6efe1', '#4b9fd4'])
+      });
+    }
+    for (var bi = 0; bi < 26; bi++) {
+      B.balls.push({
+        x: 40 + rng() * (CITY_W - 80), y: CITY_H + 140 + rng() * (C.BEACH_H - 260),
+        color: U.pick(rng, ['#f2c14e', '#e4572e', '#5aa9d6', '#f6efe1'])
+      });
+    }
+    for (var si = 0; si < 16; si++) {
+      B.boards.push({
+        x: 60 + rng() * (CITY_W - 120), y: CITY_H + 90 + rng() * 90,
+        a: (rng() - 0.5) * 0.6, color: U.pick(rng, ['#f2c14e', '#37d3cf', '#ff6f7d', '#f6efe1'])
+      });
+    }
+    B.towers.push({ x: 2.2 * CELL, y: CITY_H + 272 }, { x: 13.5 * CELL, y: CITY_H + 300 });
+    B.kiosks.push(
+      { x: 4.6 * CELL, y: CITY_H + 96, w: 120, h: 76, sign: 'VERA\u2019S', tone: '#3f8f8a' },
+      { x: 9.1 * CELL, y: CITY_H + 84, w: 96, h: 66, sign: 'SURF', tone: '#c05e8f' }
+    );
+    B.nets.push({ x: 6.6 * CELL, y: CITY_H + 300 }, { x: 11.4 * CELL, y: CITY_H + 236 });
+    for (var ri = 0; ri < 26; ri++) {
+      B.rocks.push({ x: 30 + rng() * (CITY_W - 60), y: CITY_H + C.BEACH_H - 40 + rng() * 30, r: 4 + rng() * 9 });
+    }
     for (var i = 0; i < 54; i++) {
       city.palms.push({
         x: 40 + rng() * (CITY_W - 80),
-        y: CITY_H + 100 + rng() * (C.BEACH_H - 190),
+        y: CITY_H + 92 + rng() * (C.BEACH_H - 170),
         h: 46 + rng() * 34,
         lean: (rng() - 0.5) * 26,
         sway: rng() * 6.28,
@@ -172,11 +202,11 @@
     for (var u = 0; u < 16; u++) {
       city.umbrellas.push({
         x: 60 + rng() * (CITY_W - 120),
-        y: CITY_H + 210 + rng() * (C.BEACH_H - 300),
+        y: CITY_H + 190 + rng() * (C.BEACH_H - 250),
         color: U.pick(rng, ['#e4572e', '#f2c14e', '#2a9d8f', '#e76f51', '#7d5ba6'])
       });
     }
-    city.pier = { x: CITY_W * 0.62, y: CITY_H + C.BEACH_H - 40, w: 150, len: 520 };
+    city.pier = { x: CITY_W * 0.62, y: CITY_H + C.BEACH_H - 40, w: 150, len: 470 };
   }
 
   /* ---------- queries: what is solid, what is road ---------- */
@@ -222,9 +252,9 @@
   }
 
   function draw(city, ctx, cam, t) {
+    // the caller has already put the context in world coordinates
     ctx.save();
-    ctx.translate(-cam.x, -cam.y);
-    drawGround(city, ctx, cam);
+    drawGround(city, ctx, cam, t);
     drawMarkings(city, ctx, cam);
     drawShadows(city, ctx, cam);
     drawBlocks(city, ctx, cam, t);
@@ -232,7 +262,7 @@
     ctx.restore();
   }
 
-  function drawGround(city, ctx, cam) {
+  function drawGround(city, ctx, cam, t) {
     // Sand base everywhere: the city sits on it and the beach continues it to the water.
     ctx.fillStyle = P.sand;
     ctx.fillRect(cam.x - 400, cam.y - 400, viewW(cam) + 800, viewH(cam) + 800);
@@ -262,10 +292,10 @@
       ctx.fillRect(Math.max(0, cam.x - 40), p - HALF_ROAD, Math.min(CITY_W, cam.x + viewW(cam) + 80) - Math.max(0, cam.x - 40), ROAD);
     }
     // Beach promenade, sand and sea.
-    drawBeach(city, ctx, cam);
+    drawBeach(city, ctx, cam, t);
   }
 
-  function drawBeach(city, ctx, cam) {
+  function drawBeach(city, ctx, cam, t) {
     var top = BEACH_TOP;
     if (cam.y + viewH(cam) < top - 60) return;
 
@@ -274,10 +304,13 @@
     ctx.fillRect(0, top - 18, CITY_W, 46);
     ctx.fillStyle = P.sandWet;
     for (var i = 0; i < CITY_W; i += 26) ctx.fillRect(i, top - 12, 2, 34);
+    // railing posts along the boardwalk
+    ctx.fillStyle = 'rgba(120,95,70,0.55)';
+    for (var rp = 0; rp < CITY_W; rp += 54) ctx.fillRect(rp, top - 20, 4, 10);
 
     // wet sand transition
     ctx.fillStyle = P.sandWet;
-    ctx.fillRect(0, top + C.BEACH_H - 120, CITY_W, 60);
+    ctx.fillRect(0, top + C.BEACH_H - 96, CITY_W, 52);
 
     // sea
     var seaTop = top + C.BEACH_H;
@@ -311,6 +344,10 @@
     }
     ctx.globalAlpha = 1;
 
+    // beach furniture, drawn before the sea so nothing spills onto the water
+    var B = city.beachSet;
+    if (B) drawBeachSet(ctx, B, t, (t || 0), cam);
+
     // pier
     var pier = city.pier;
     ctx.fillStyle = '#a8835a';
@@ -320,6 +357,122 @@
     for (var d = 0; d < pier.len; d += 26) ctx.strokeRect(pier.x, seaTop - 26 + d, pier.w, 4);
     ctx.fillStyle = 'rgba(0,0,0,0.16)';
     ctx.fillRect(pier.x + pier.w, seaTop - 26, 10, pier.len);
+  }
+
+  /* Towels, balls, surf racks, kiosks, lifeguard towers and volleyball nets: the life of the beach. */
+  function drawBeachSet(ctx, B, t, time, cam) {
+    var vw = cam.w || C.VW, vh = cam.h || C.VH;
+    function vis(x, y, m) {
+      m = m || 70;
+      return x > cam.x - m && x < cam.x + vw + m && y > cam.y - m && y < cam.y + vh + m;
+    }
+    var i, o;
+    for (i = 0; i < B.towels.length; i++) {
+      o = B.towels[i];
+      if (!vis(o.x, o.y)) continue;
+      ctx.save(); ctx.translate(o.x, o.y); ctx.rotate(o.a);
+      ctx.fillStyle = 'rgba(120,90,60,0.16)';
+      ctx.fillRect(-12, -6, 28, 16);
+      ctx.fillStyle = o.color;
+      ctx.fillRect(-15, -10, 30, 19);
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.fillRect(-15, -8, 30, 3);
+      ctx.fillRect(-15, 4, 30, 3);
+      ctx.fillStyle = 'rgba(0,0,0,0.12)';
+      ctx.fillRect(-15, 9, 30, 2);
+      ctx.restore();
+    }
+    for (i = 0; i < B.balls.length; i++) {
+      o = B.balls[i];
+      if (!vis(o.x, o.y, 30)) continue;
+      ctx.fillStyle = o.color;
+      ctx.beginPath(); ctx.arc(o.x, o.y, 4.5, 0, 6.283); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.beginPath(); ctx.arc(o.x - 1.2, o.y - 1.4, 2, 0, 6.283); ctx.fill();
+    }
+    for (i = 0; i < B.boards.length; i++) {
+      o = B.boards[i];
+      if (!vis(o.x, o.y)) continue;
+      ctx.save(); ctx.translate(o.x, o.y); ctx.rotate(o.a);
+      ctx.fillStyle = 'rgba(120,90,60,0.16)';
+      ctx.fillRect(-5, -10, 14, 34);
+      ctx.fillStyle = o.color;
+      U.roundRect(ctx, -4, -14, 8, 30, 4); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.fillRect(-1, -10, 2, 22);
+      ctx.restore();
+    }
+    for (i = 0; i < B.nets.length; i++) {
+      o = B.nets[i];
+      if (!vis(o.x, o.y)) continue;
+      ctx.strokeStyle = 'rgba(245,240,228,0.72)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(o.x - 46, o.y - 16, 92, 32);
+      for (var nx = -46; nx <= 46; nx += 12) {
+        ctx.beginPath(); ctx.moveTo(o.x + nx, o.y - 16); ctx.lineTo(o.x + nx, o.y + 16); ctx.stroke();
+      }
+      for (var ny = -16; ny <= 16; ny += 8) {
+        ctx.beginPath(); ctx.moveTo(o.x - 46, o.y + ny); ctx.lineTo(o.x + 46, o.y + ny); ctx.stroke();
+      }
+      ctx.fillStyle = '#8d7a63';
+      ctx.fillRect(o.x - 50, o.y - 20, 5, 5); ctx.fillRect(o.x + 45, o.y - 20, 5, 5);
+    }
+    for (i = 0; i < B.towers.length; i++) {
+      o = B.towers[i];
+      if (!vis(o.x, o.y)) continue;
+      ctx.fillStyle = 'rgba(120,90,60,0.2)';
+      ctx.fillRect(o.x - 24, o.y - 18, 52, 44);
+      ctx.fillStyle = '#f6efe1';
+      ctx.fillRect(o.x - 26, o.y - 24, 52, 40);
+      ctx.fillStyle = '#e4572e';
+      ctx.fillRect(o.x - 26, o.y - 24, 52, 9);
+      ctx.fillStyle = '#9b8b74';
+      ctx.fillRect(o.x - 20, o.y - 34, 40, 12);
+      ctx.fillStyle = '#2b3a44';
+      ctx.fillRect(o.x - 8, o.y - 13, 16, 10);
+    }
+    for (i = 0; i < B.kiosks.length; i++) {
+      o = B.kiosks[i];
+      if (!vis(o.x, o.y, 120)) continue;
+      // awning shadow, deck, body, striped awning, sign board
+      ctx.fillStyle = 'rgba(110,80,55,0.22)';
+      ctx.fillRect(o.x + 10, o.y + 8, o.w, o.h + 14);
+      ctx.fillStyle = '#cfa06f';
+      ctx.fillRect(o.x - 6, o.y + o.h - 4, o.w + 12, 16);
+      ctx.fillStyle = '#f3e6cd';
+      ctx.fillRect(o.x, o.y, o.w, o.h);
+      ctx.strokeStyle = 'rgba(90,68,48,0.4)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(o.x, o.y, o.w, o.h);
+      // striped awning along the beach face
+      for (var a = 0; a < o.w; a += 16) {
+        ctx.fillStyle = a % 32 === 0 ? o.tone : '#f6efe1';
+        ctx.fillRect(o.x + a, o.y + o.h - 12, 16, 14);
+      }
+      // counter window
+      ctx.fillStyle = 'rgba(46,62,68,0.8)';
+      ctx.fillRect(o.x + 12, o.y + 12, o.w - 24, 18);
+      ctx.fillStyle = 'rgba(255,236,180,0.35)';
+      ctx.fillRect(o.x + 14, o.y + 14, o.w - 28, 5);
+      // sign
+      ctx.fillStyle = 'rgba(28,22,18,0.85)';
+      ctx.fillRect(o.x + o.w * 0.14, o.y - 16, o.w * 0.72, 18);
+      ctx.fillStyle = '#ffe9a8';
+      ctx.font = 'bold 12px "Arial Narrow", Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(o.sign, o.x + o.w / 2, o.y - 6);
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+    }
+    for (i = 0; i < B.rocks.length; i++) {
+      o = B.rocks[i];
+      if (!vis(o.x, o.y, 30)) continue;
+      ctx.fillStyle = '#8e8678';
+      ctx.beginPath(); ctx.ellipse(o.x, o.y, o.r, o.r * 0.7, 0.4, 0, 6.283); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      ctx.beginPath(); ctx.ellipse(o.x - o.r * 0.25, o.y - o.r * 0.25, o.r * 0.55, o.r * 0.35, 0.4, 0, 6.283); ctx.fill();
+    }
   }
 
   function drawMarkings(city, ctx, cam) {
@@ -359,10 +512,11 @@
     for (var i = 0; i < city.buildings.length; i++) {
       var bd = city.buildings[i];
       if (bd.x + bd.w < cam.x - 120 || bd.x > cam.x + viewW(cam) + 120 || bd.y + bd.h < cam.y - 120 || bd.y > cam.y + viewH(cam) + 120) continue;
-      var off = 14 + bd.floors * 5;
-      ctx.fillRect(bd.x + off, bd.y + off * 0.7, bd.w, bd.h);
-      ctx.fillRect(bd.x + bd.w, bd.y + off * 0.7, off, bd.h);
-      ctx.fillRect(bd.x, bd.y + bd.h, bd.w + off, off * 0.7);
+      var off = 16 + bd.floors * 4.5;
+      // a long thrown shadow, then the building's own extruded walls sit on top of it
+      ctx.fillRect(bd.x + off + 6, bd.y + off + 4, bd.w, bd.h);
+      ctx.fillRect(bd.x + bd.w + off * 0.4, bd.y + off + 4, off * 1.3, bd.h);
+      ctx.fillRect(bd.x, bd.y + bd.h + off * 0.4, bd.w + off * 1.3, off * 0.8);
     }
   }
 
@@ -438,90 +592,147 @@
   }
 
   function drawBuilding(ctx, b, t) {
-    // wall band (the little you see of the sides from straight above)
-    ctx.fillStyle = shade(b.wall, -0.12);
-    ctx.fillRect(b.x, b.y, b.w, b.h);
-    // roof
-    ctx.fillStyle = b.roof;
-    ctx.fillRect(b.x + 3, b.y + 3, b.w - 6, b.h - 6);
+    // The body, extruded toward the viewer: two facades plus the roof plate, so a top-down
+    // city still reads as a city of volumes rather than a floor plan.
+    var off = Math.min(30, 7 + b.floors * 3.2);
+    var wallDark = shade(b.wall, -0.34);
+    var wallMid = shade(b.wall, -0.1);
+    // front (south) facade
+    ctx.fillStyle = wallDark;
+    ctx.beginPath();
+    ctx.moveTo(b.x, b.y + b.h);
+    ctx.lineTo(b.x + b.w, b.y + b.h);
+    ctx.lineTo(b.x + b.w + off * 0.55, b.y + b.h + off);
+    ctx.lineTo(b.x + off * 0.55, b.y + b.h + off);
+    ctx.closePath(); ctx.fill();
+    // side (east) facade
+    ctx.fillStyle = wallMid;
+    ctx.beginPath();
+    ctx.moveTo(b.x + b.w, b.y);
+    ctx.lineTo(b.x + b.w + off * 0.55, b.y + off);
+    ctx.lineTo(b.x + b.w + off * 0.55, b.y + b.h + off);
+    ctx.lineTo(b.x + b.w, b.y + b.h);
+    ctx.closePath(); ctx.fill();
+    // facade window rows on the two visible sides
+    drawFacade(ctx, b, off, wallDark, wallMid);
 
-    // window grid on the roof-border band, giving the "lit windows" look from above
-    var cols = Math.max(2, Math.floor((b.w - 16) / 17));
-    var rows = Math.max(2, Math.floor((b.h - 16) / 17));
+    // wall band: the strip of facade you see between roof edge and street
+    ctx.fillStyle = shade(b.wall, -0.18);
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    // roof deck
+    ctx.fillStyle = b.roof;
+    ctx.fillRect(b.x + 4, b.y + 4, b.w - 8, b.h - 8);
+
+    // windows only around the rim, so the roof reads as a roof and the facade reads as lit rooms
     var rng = PC.makeRng(b.winSeed);
-    var pad = 9;
-    var cw = (b.w - pad * 2) / cols, ch = (b.h - pad * 2) / rows;
-    for (var ry = 0; ry < rows; ry++) {
-      for (var rx = 0; rx < cols; rx++) {
+    var pad = 8, step = 15;
+    var cols = Math.max(1, Math.floor((b.w - pad * 2) / step));
+    var rows = Math.max(1, Math.floor((b.h - pad * 2) / step));
+    for (var rx = 0; rx < cols; rx++) {
+      for (var ry = 0; ry < rows; ry++) {
+        var onRim = rx === 0 || ry === 0 || rx === cols - 1 || ry === rows - 1;
+        if (!onRim) { rng(); rng(); continue; }
         var lit = rng() < b.litRatio;
-        var edge = rx === 0 || ry === 0 || rx === cols - 1 || ry === rows - 1;
-        if (!edge && rng() < 0.72) continue;
         ctx.fillStyle = lit ? P.windowLit : P.windowDark;
-        ctx.globalAlpha = lit ? 0.95 : 0.7;
-        ctx.fillRect(b.x + pad + rx * cw + 2, b.y + pad + ry * ch + 2, cw - 5, ch - 5);
+        ctx.globalAlpha = lit ? 1 : 0.85;
+        ctx.fillRect(b.x + pad + rx * step, b.y + pad + ry * step, step - 5, step - 5);
       }
     }
     ctx.globalAlpha = 1;
 
-    // inner roof: AC units, vents, a stair hut
-    if (b.w > 84 && b.h > 84) {
-      ctx.fillStyle = shade(b.roof, -0.16);
-      var ux = b.x + b.w * 0.24, uy = b.y + b.h * 0.26;
+    // roof deck details: AC boxes, vents, a stair hut, a parapet line
+    var inset = 22;
+    if (b.w > 74 && b.h > 74) {
+      ctx.fillStyle = shade(b.roof, -0.1);
       for (var u = 0; u < b.unitCount; u++) {
-        var uw = 16 + (u % 2) * 10, uh = 12 + (u % 3) * 4;
-        ctx.fillRect(ux + (u % 2) * 46, uy + Math.floor(u / 2) * 30, uw, uh);
-        ctx.strokeStyle = shade(b.roof, -0.34);
+        var uw = 14 + (u % 3) * 6, uh = 11 + (u % 2) * 5;
+        var ux = b.x + inset + ((u * 37) % Math.max(1, (b.w - inset * 2 - uw)));
+        var uy = b.y + inset + ((u * 23) % Math.max(1, (b.h - inset * 2 - uh)));
+        ctx.fillRect(ux, uy, uw, uh);
+        ctx.strokeStyle = 'rgba(60,40,25,0.18)';
         ctx.lineWidth = 1;
-        ctx.strokeRect(ux + (u % 2) * 46, uy + Math.floor(u / 2) * 30, uw, uh);
+        ctx.strokeRect(ux, uy, uw, uh);
       }
-      if (b.style === 'tower') {
-        ctx.fillStyle = shade(b.roof, 0.1);
-        ctx.fillRect(b.x + b.w * 0.62, b.y + b.h * 0.6, b.w * 0.24, b.h * 0.2);
+      if (b.style === 'tower' || b.style === 'house') {
+        ctx.fillStyle = shade(b.roof, 0.12);
+        ctx.fillRect(b.x + b.w * 0.55, b.y + b.h * 0.52, Math.min(28, b.w * 0.24), Math.min(24, b.h * 0.2));
       }
     }
-    // setback slabs on towers
+    // parapet outline just inside the rim
+    ctx.strokeStyle = shade(b.roof, -0.24);
+    ctx.lineWidth = 2;
+    ctx.strokeRect(b.x + 19, b.y + 19, b.w - 38, b.h - 38);
+
+    // setback slabs give towers their stepped silhouette from above
     if (b.sets) {
       for (var s = 0; s < b.sets.length; s++) {
         var st = b.sets[s];
-        ctx.fillStyle = shade(b.roof, s === 0 ? 0.1 : -0.06);
+        ctx.fillStyle = shade(b.roof, s === 0 ? 0.14 : -0.05);
         ctx.fillRect(st.x, st.y, st.w, st.h);
-        ctx.strokeStyle = 'rgba(0,0,0,0.14)';
+        ctx.strokeStyle = 'rgba(50,35,22,0.22)';
+        ctx.lineWidth = 1.5;
         ctx.strokeRect(st.x, st.y, st.w, st.h);
       }
     }
-    // shop awnings and a sign
+
+    // shop awning along the street face and a hanging sign
     if (b.style === 'shop') {
       ctx.fillStyle = b.awning;
-      ctx.fillRect(b.x + 4, b.y + b.h - 16, b.w - 8, 9);
-      ctx.fillStyle = 'rgba(255,255,255,0.35)';
-      for (var aw = b.x + 8; aw < b.x + b.w - 10; aw += 14) ctx.fillRect(aw, b.y + b.h - 16, 6, 9);
+      ctx.fillRect(b.x + 3, b.y + b.h - 15, b.w - 6, 11);
+      ctx.fillStyle = 'rgba(255,255,255,0.34)';
+      for (var aw = b.x + 8; aw < b.x + b.w - 10; aw += 15) ctx.fillRect(aw, b.y + b.h - 15, 7, 11);
       if (b.hasSign) {
-        ctx.fillStyle = P.ink;
-        ctx.globalAlpha = 0.82;
-        ctx.fillRect(b.x + 8, b.y + 6, Math.min(b.w - 16, 74), 15);
-        ctx.globalAlpha = 1;
+        var sw = Math.min(b.w - 18, 78);
+        ctx.fillStyle = 'rgba(28,22,18,0.86)';
+        ctx.fillRect(b.x + 9, b.y + 7, sw, 16);
         ctx.fillStyle = '#ffe9a8';
         ctx.font = 'bold 10px "Arial Narrow", Arial, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(b.sign, b.x + 8 + Math.min(b.w - 16, 74) / 2, b.y + 17);
+        ctx.textBaseline = 'middle';
+        ctx.fillText(b.sign, b.x + 9 + sw / 2, b.y + 16);
         ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
       }
     }
-    // outline
-    ctx.strokeStyle = 'rgba(40,28,20,0.35)';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(b.x + 3, b.y + 3, b.w - 6, b.h - 6);
 
-    // private pool in a courtyard
+    // crisp roof edge
+    ctx.strokeStyle = 'rgba(60,42,28,0.42)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
+
     if (b.pool) {
-      ctx.fillStyle = '#66c7d6';
-      var px = b.x + b.w + 10, py = b.y + 12;
-      if (px + 40 < b.x + b.w + 200) {
-        ctx.fillRect(px, py, 34, 22);
-        ctx.strokeStyle = '#e9e2d2';
+      var px = b.x + b.w + 12, py = b.y + 14;
+      if (px + 40 < b.x + b.w + 240) {
+        ctx.fillStyle = '#6cc9d6';
+        ctx.fillRect(px, py, 36, 22);
+        ctx.strokeStyle = '#f1e9d8';
         ctx.lineWidth = 3;
-        ctx.strokeRect(px, py, 34, 22);
+        ctx.strokeRect(px, py, 36, 22);
       }
+    }
+  }
+
+  /* Lit windows on the two visible facades, drawn as small quads following the extrusion. */
+  function drawFacade(ctx, b, off, wallDark, wallMid) {
+    var floors = Math.min(14, b.floors);
+    var cols = Math.max(2, Math.min(9, Math.floor(b.w / 24)));
+    var rng = PC.makeRng(b.winSeed + 7);
+    for (var f = 0; f < floors; f++) {
+      var fy = (f + 0.6) / floors * off;
+      for (var c = 0; c < cols; c++) {
+        var lit = rng() < b.litRatio;
+        if (!lit && rng() < 0.5) continue;
+        ctx.fillStyle = lit ? 'rgba(255,214,140,0.9)' : 'rgba(40,58,74,0.75)';
+        var w = (b.w - 14) / cols * 0.62;
+        var x = b.x + 7 + (b.w - 14) / cols * c + 2;
+        ctx.fillRect(x, b.y + b.h + fy, w, Math.max(1.6, off * 0.055));
+      }
+    }
+    // a couple of lit windows on the east facade too
+    for (var f2 = 0; f2 < floors; f2 += 2) {
+      var fx = (f2 + 0.5) / floors * off;
+      ctx.fillStyle = 'rgba(255,206,130,0.55)';
+      ctx.fillRect(b.x + b.w + fx, b.y + 12, Math.max(1.6, off * 0.05), Math.max(6, b.h * 0.2));
     }
   }
 

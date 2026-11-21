@@ -87,7 +87,7 @@
     arcade: { x: 7.2 * C.CELL, y: 11.2 * C.CELL },
     marina: { x: 14.2 * C.CELL, y: C.CITY_H + 62 },
     garage: { x: 5.8 * C.CELL, y: 14.4 * C.CELL },
-    pier: { x: C.CITY_W * 0.62 + 75, y: C.CITY_H + C.BEACH_H + 200 },
+    pier: { x: C.CITY_W * 0.62 + 75, y: C.CITY_H + C.BEACH_H + 170 },
     bank: { x: 10.6 * C.CELL, y: 8.2 * C.CELL }
   };
 

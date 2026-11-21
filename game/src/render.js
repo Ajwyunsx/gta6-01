@@ -39,14 +39,15 @@
     // the shake offset and camera zoom
     var fx = world.effects;
     var z = cam.zoom;
-    ctx.save();
-    ctx.translate(C.VW / 2, C.VH / 2);
-    ctx.scale(z, z);
-    ctx.translate(-C.VW / 2 + fx.sx, -C.VH / 2 + fx.sy);
-
-    // visible rect in world space for culling and the light pass
+    // the camera holds the visible rect's top-left in world units; zoom scales about the middle
     var vw = C.VW / z, vh = C.VH / z;
-    var view = { x: cam.x + vw * 0.5 - C.VW * 0.5, y: cam.y + vh * 0.5 - C.VH * 0.5, w: vw, h: vh };
+    ctx.save();
+    ctx.translate(C.VW / 2 + fx.sx, C.VH / 2 + fx.sy);
+    ctx.scale(z, z);
+    ctx.translate(-vw / 2 - cam.x, -vh / 2 - cam.y);
+
+    // visible rect in world space for culling
+    var view = { x: cam.x, y: cam.y, w: vw, h: vh };
 
     PC.city.draw(world.city, ctx, view, t);
 
@@ -72,21 +73,24 @@
     for (var k = 0; k < world.heat.cops.length; k++) all.push(world.heat.cops[k]);
     if (world.player.inCar) all.push(world.player.inCar);
 
+    var drawn = 0;
     for (var c = 0; c < all.length; c++) {
       var car = all[c];
       if (car.x < view.x - 120 || car.x > view.x + view.w + 120) continue;
       if (car.y < view.y - 120 || car.y > view.y + view.h + 120) continue;
       PC.vehicles.drawCar(ctx, car, t);
+      drawn++;
       if (car.driver === 'player') drawDriverGlow(ctx, car, t);
     }
+    if (window.__shotDebug) window.__shotDebug.carsDrawn = drawn;
   }
 
   function drawDriverGlow(ctx, car, t) {
     ctx.save();
     ctx.translate(car.x, car.y);
     ctx.rotate(car.angle);
-    ctx.fillStyle = 'rgba(255,240,190,' + (0.14 + Math.sin(t * 3) * 0.04) + ')';
-    ctx.beginPath(); ctx.arc(0, 0, car.wid * 0.9, 0, 6.283); ctx.fill();
+    ctx.fillStyle = 'rgba(255,236,180,' + (0.10 + Math.sin(t * 3) * 0.03) + ')';
+    ctx.beginPath(); ctx.arc(0, 0, car.wid * 0.62, 0, 6.283); ctx.fill();
     ctx.restore();
   }
 

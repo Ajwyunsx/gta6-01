@@ -8,7 +8,7 @@
   var GRID = 17;           // blocks per side: a 5440 px city
   var CITY_W = CELL * GRID;
   var CITY_H = CELL * GRID;
-  var BEACH_H = 620;
+  var BEACH_H = 430;
 
   PC.CONFIG = {
     VW: 1280,
@@ -83,7 +83,7 @@
   /* The art direction: a sun-bleached art-deco seaside city at golden hour — warm sand,
      turquoise water, pastel stucco and long shadows thrown south-east. */
   PC.PALETTE = {
-    sand: '#f4dcb1',
+    sand: '#f6dfb6',
     sandLight: '#fbeccb',
     sandDark: '#e6c795',
     sandWet: '#dcbf90',
@@ -91,12 +91,12 @@
     waterDeep: '#1a7e94',
     waterLight: '#63cfd2',
     foam: '#e8fbf8',
-    asphalt: '#41444b',
-    asphaltDark: '#34373d',
+    asphalt: '#4d5058',
+    asphaltDark: '#3b3e45',
     asphaltLine: '#e8e1cd',
     yellowLine: '#e8c268',
-    sidewalk: '#d9cfbe',
-    sidewalkEdge: '#c2b6a2',
+    sidewalk: '#e3d8c3',
+    sidewalkEdge: '#cdbfa7',
     curb: '#b3a691',
     grass: '#8eb98b',
     grassDark: '#75a274',
@@ -105,7 +105,7 @@
     palmTrunk: '#8a6a4b',
     windowLit: '#ffd88c',
     windowDark: '#39505e',
-    shadow: 'rgba(60, 40, 30, 0.22)',
+    shadow: 'rgba(72, 46, 30, 0.26)',
     ink: '#221c1a',
     paper: '#f6efe1',
     money: '#7fc98b',

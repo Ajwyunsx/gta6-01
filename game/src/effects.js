@@ -10,10 +10,22 @@
   function makeEffects() {
     var parts = new Array(POOL);
     for (var i = 0; i < POOL; i++) parts[i] = { live: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 1, size: 2, color: '#fff', kind: 'dot', drag: 0.9 };
-    return {
+    var fx = {
       parts: parts, next: 0, shakeAmt: 0, shakeT: 0, flash: 0,
       sx: 0, sy: 0
     };
+    // bound verbs on the instance so callers can say world.effects.burst(...)
+    fx.burst = function (x, y, n, color, speed) { burst(fx, x, y, n, color, speed); };
+    fx.spark = function (x, y, color) { spark(fx, x, y, color); };
+    fx.impact = function (x, y) { impact(fx, x, y); };
+    fx.blood = function (x, y, ang) { blood(fx, x, y, ang); };
+    fx.muzzle = function (x, y, ang) { muzzle(fx, x, y, ang); };
+    fx.puff = function (x, y) { puff(fx, x, y); };
+    fx.smoke = function (x, y, n) { smoke(fx, x, y, n); };
+    fx.explode = function (x, y) { explode(fx, x, y); };
+    fx.cash = function (x, y, n) { cash(fx, x, y, n); };
+    fx.shake = function (a) { shake(fx, a); };
+    return fx;
   }
 
   function spawn(fx, x, y, vx, vy, life, size, color, kind, drag) {
@@ -107,8 +119,8 @@
   }
 
   function draw(fx, ctx, cam) {
+    // the caller has already put the context in world coordinates
     ctx.save();
-    ctx.translate(-cam.x, -cam.y);
     for (var i = 0; i < POOL; i++) {
       var p = fx.parts[i];
       if (!p.live) continue;

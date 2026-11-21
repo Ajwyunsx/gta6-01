@@ -174,14 +174,29 @@
 
   function drawPlayer(ctx, pl, t) {
     if (pl.inCar) return;
-    drawPerson(ctx, pl.x, pl.y, pl.angle, pl.walk, pl.shirt, pl.pants, pl.skin, pl.hair, 1, pl.hurt, false, pl.bag);
+    // a soft gold ring marks the player among the crowd of pedestrians
+    ctx.save();
+    ctx.translate(pl.x, pl.y);
+    ctx.fillStyle = 'rgba(255,235,190,0.16)';
+    ctx.beginPath(); ctx.arc(0, 0, 22, 0, 6.283); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,226,160,0.9)';
+    ctx.lineWidth = 1.6;
+    // four corner ticks rather than a full ring: a selection bracket, not a halo
+    for (var q = 0; q < 4; q++) {
+      var a0 = q * Math.PI / 2 + 0.32, a1 = q * Math.PI / 2 + 1.25;
+      ctx.beginPath(); ctx.arc(0, 0, 21, a0, a1); ctx.stroke();
+    }
+    ctx.restore();
+    drawPerson(ctx, pl.x, pl.y, pl.angle, pl.walk, pl.shirt, pl.pants, pl.skin, pl.hair, 1.45, pl.hurt, false, pl.bag);
     if (pl.weapon === 'pistol') {
-      var hx = pl.x + Math.cos(pl.angle) * 11, hy = pl.y + Math.sin(pl.angle) * 11;
+      var hx = pl.x + Math.cos(pl.angle) * 14, hy = pl.y + Math.sin(pl.angle) * 14;
       ctx.save();
       ctx.translate(hx, hy);
       ctx.rotate(pl.angle);
       ctx.fillStyle = '#2a2a2e';
-      ctx.fillRect(0, -2.2, 10 - pl.recoil * 2, 4.4);
+      ctx.fillRect(0, -3, 13 - pl.recoil * 3, 6);
+      ctx.fillStyle = '#4a4a52';
+      ctx.fillRect(2, -2, 8, 1.5);
       ctx.restore();
     }
   }
@@ -250,7 +265,7 @@
       ctx.restore();
       return;
     }
-    drawPerson(ctx, ped.x, ped.y, ped.angle, ped.walk, ped.shirt, ped.pants, ped.skin, ped.hair, 0.92, ped.hurt, ped.isCop, ped.bag);
+    drawPerson(ctx, ped.x, ped.y, ped.angle, ped.walk, ped.shirt, ped.pants, ped.skin, ped.hair, 1.05, ped.hurt, ped.isCop, ped.bag);
   }
 
   PC.entities = {

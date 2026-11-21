@@ -168,6 +168,12 @@
     ctx.fillStyle = car.paint;
     U.roundRect(ctx, -L / 2, -W / 2, L, W, W * 0.32);
     ctx.fill();
+    if (car.driver === 'player') {
+      ctx.strokeStyle = 'rgba(255,244,214,0.9)';
+      ctx.lineWidth = 2;
+      U.roundRect(ctx, -L / 2 - 1.5, -W / 2 - 1.5, L + 3, W + 3, W * 0.34);
+      ctx.stroke();
+    }
     // bonnet and boot shade
     ctx.fillStyle = 'rgba(0,0,0,0.12)';
     ctx.fillRect(-L / 2 + 4, -W / 2 + 2, L * 0.18, W - 4);

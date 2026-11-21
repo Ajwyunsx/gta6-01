@@ -58,6 +58,17 @@
   function updateTrafficCar(car, dt, world, rng) {
     if (car.driver === 'player') return;
     if (car.police) return;
+    if (car.frozen) return;
+    // a car set to drive straight keeps its heading: used by the staged shots, and by a
+    // car that has just been knocked off the grid and needs to clear the junction
+    if (car.straight) {
+      car.speed = U.approach(car.speed, car.cruise, 140 * dt);
+      var sx = car.x + Math.cos(car.angle) * car.speed * dt;
+      var sy = car.y + Math.sin(car.angle) * car.speed * dt;
+      if (PC.city.collideCircle(world.city, sx, sy, car.wid * 0.5)) { car.speed *= 0.4; car.straight = false; }
+      else { car.x = sx; car.y = sy; }
+      return;
+    }
 
     var target = lanePoint(car.gx, car.gy, car.axis, car.dir);
     var d = U.dist(car.x, car.y, target.x, target.y);
@@ -134,8 +145,8 @@
       world.parked.push(car); n++;
     }
     // the beach parking row, facing the water
-    for (var b = 0; b < 12; b++) {
-      var bx = C.CITY_W * 0.18 + b * 74, by = C.CITY_H + 42;
+    for (var b = 0; b < 8; b++) {
+      var bx = C.CITY_W * 0.18 + b * 96, by = C.CITY_H + 40;
       var bc = V.makeCar(bx, by, Math.PI / 2, { rng: rng, parked: true });
       bc.occupied = rng() < 0.1;
       world.parked.push(bc);

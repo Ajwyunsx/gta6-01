@@ -132,15 +132,15 @@
     if (pl.inCar) return;
     ctx.save();
     ctx.fillStyle = 'rgba(18,18,22,0.5)';
-    U.roundRect(ctx, W - 152, H - 62, 128, 44, 9); ctx.fill();
-    ctx.font = 'bold 20px "Courier New", monospace';
+    U.roundRect(ctx, 330, H - 62, 118, 44, 9); ctx.fill();
+    ctx.font = 'bold 19px "Courier New", monospace';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = pl.ammo > 0 ? '#f4ead2' : '#ff6b5a';
-    ctx.fillText(pl.reloading > 0 ? '…' : pl.ammo + ' / ' + pl.reserve, W - 34, H - 34);
+    ctx.fillText(pl.reloading > 0 ? '…' : pl.ammo + ' / ' + pl.reserve, 428, H - 34);
     ctx.font = 'bold 10px Arial, sans-serif';
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.fillText('PISTOL', W - 34, H - 52);
+    ctx.fillText('PISTOL', 428, H - 52);
     ctx.restore();
   }
 
@@ -170,16 +170,16 @@
     var car = world.player.inCar;
     var kph = Math.round(Math.abs(car.speed) * 0.42);
     ctx.save();
-    ctx.font = 'bold 26px "Trebuchet MS", Arial, sans-serif';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'bottom';
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fillText(kph, W - 165, H - 70);
+    ctx.font = 'bold 30px "Trebuchet MS", Arial, sans-serif';
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillText(kph, W - 25, H - 214);
     ctx.fillStyle = '#f4ead2';
-    ctx.fillText(kph, W - 167, H - 72);
+    ctx.fillText(kph, W - 27, H - 216);
     ctx.font = 'bold 10px Arial, sans-serif';
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.fillText('KM/H', W - 167, H - 56);
+    ctx.fillText('KM/H', W - 27, H - 198);
     ctx.restore();
   }
 

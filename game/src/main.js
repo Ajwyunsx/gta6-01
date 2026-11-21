@@ -9,6 +9,7 @@
   var MAX_FRAME = 0.25;
 
   function boot() {
+    console.log('[palmcity] boot', document.readyState, window.location.search);
     var params = new URLSearchParams(window.location.search);
     var shot = params.get('shot');
     var seedParam = Number.parseInt(params.get('seed') || '', 10);
@@ -21,7 +22,13 @@
     window.addEventListener('resize', function () { PC.render.resize(renderer); });
 
     if (shot) {
-      PC.shots.stage(shot, { canvas: canvas, renderer: renderer, seed: seed });
+      try {
+        PC.shots.stage(shot, { canvas: canvas, renderer: renderer, seed: seed });
+      } catch (err) {
+        if (status) status.textContent = 'SHOT FAILED: ' + (err && err.message);
+        document.title = 'SHOT FAILED: ' + (err && err.message);
+        throw err;
+      }
       return;
     }
 
