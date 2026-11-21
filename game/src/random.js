@@ -33,6 +33,10 @@ export function hashFloat(x, y, salt = 0) {
   return hash2(x, y, salt) / 4294967296;
 }
 
+export function randomRange(a, b) {
+  return a + Math.random() * (b - a);
+}
+
 export function clamp(v, lo, hi) {
   return v < lo ? lo : v > hi ? hi : v;
 }
