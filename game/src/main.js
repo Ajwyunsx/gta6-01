@@ -101,8 +101,11 @@ if (shot) {
   state = 'play';
   shotConfig = applyShot(world, shot);
   if (shotConfig) {
-    camera.x = shotConfig.focus.x - WIDTH / 2;
-    camera.y = shotConfig.focus.y - HEIGHT / 2;
+    const anchor = world.player.inCar ?? world.player;
+    const fx = anchor.x + (shotConfig.offset?.x ?? 0);
+    const fy = anchor.y + (shotConfig.offset?.y ?? 0);
+    camera.x = fx - WIDTH / 2;
+    camera.y = fy - HEIGHT / 2;
     camZoom = shotConfig.zoom ?? 1;
   }
   document.title = 'Palm City — ' + (Number(shot) || 1);
@@ -322,6 +325,10 @@ function update(dt) {
   const liveTraffic = new Set(world.traffic.cars);
   world.cars = world.cars.filter((c) => c.driver !== 'traffic' || liveTraffic.has(c));
   for (const car of world.traffic.cars) if (!world.cars.includes(car)) world.cars.push(car);
+  // The courier in a chase mission is a real car on the street: put it in the drawn
+  // pool so it renders, collides and takes bullets like any other.
+  const courier = world.missionManager.chaseCar;
+  if (courier && !world.cars.includes(courier)) world.cars.push(courier);
   resolveCarCollisions(world.cars, effects);
 
   // Police.
@@ -360,7 +367,8 @@ function update(dt) {
 function updateDriving(dt) {
   const p = world.player;
   const car = p.inCar;
-  const throttle = (input.up ? 1 : 0) - (input.down ? 1 : 0);
+  // A staged screenshot can ask for a little throttle so the car is caught in motion.
+  const throttle = shotConfig?.autoThrottle ?? ((input.up ? 1 : 0) - (input.down ? 1 : 0));
   const steer = (input.right ? 1 : 0) - (input.left ? 1 : 0);
   driveCar(car, { throttle, steer, handbrake: input.handbrake }, dt, city);
   p.x = car.x;
@@ -390,6 +398,20 @@ function aimAngle() {
 
 function updateCamera(dt) {
   const p = world.player;
+  // A staged capture pins the camera: the composition matters more than the chase cam.
+  // The anchor is recomputed from the live car each frame, with the staging offset kept,
+  // so a rolling hero car stays framed exactly where the shot wanted it.
+  if (shotConfig?.lockCamera) {
+    const anchor = p.inCar ?? p;
+    const f = { x: anchor.x + (shotConfig.offset?.x ?? 0), y: anchor.y + (shotConfig.offset?.y ?? 0) };
+    const viewW = WIDTH / camZoom;
+    const viewH = HEIGHT / camZoom;
+    camera.x = clamp(f.x - viewW / 2, 0, city.width - viewW);
+    camera.y = clamp(f.y - viewH / 2, 0, city.height - viewH);
+    camera.w = viewW;
+    camera.h = viewH;
+    return;
+  }
   const target = p.inCar
     ? { x: p.inCar.x + Math.cos(p.inCar.angle) * Math.min(150, Math.abs(p.inCar.speed) * 0.28), y: p.inCar.y + Math.sin(p.inCar.angle) * Math.min(150, Math.abs(p.inCar.speed) * 0.28) }
     : { x: p.x + Math.cos(p.aim) * 26, y: p.y + Math.sin(p.aim) * 26 };
@@ -478,6 +500,7 @@ function drawWorldFrame() {
     drawGroundMarker(ctx, m.x, m.y, m.r, m.kind === 'chase' ? COLORS.red : COLORS.teal, clock, m.label);
   }
   world.combat.draw(ctx, cam, clock);
+  world.missionManager.drawEnemies(ctx, cam, clock);
   effects.draw(ctx, cam);
   ctx.restore();
 

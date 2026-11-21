@@ -58,7 +58,7 @@ export function applyShot(world, index) {
       cop.vy = -220;
     }
     world.hint = 'E — get out  ·  SPACE — handbrake';
-    return { focus: { x: car.x, y: car.y + 20 }, zoom: 1.0 };
+    return { offset: { x: 0, y: 6 }, zoom: 1.0, autoThrottle: 0.42, lockCamera: true };
   }
 
   if (n === 2) {
@@ -86,11 +86,11 @@ export function applyShot(world, index) {
       [spot.x + 210, spot.y + spot.h + 74, 0, '#c8556f'],
     ]);
     world.hint = 'WASD to walk  ·  SHIFT to sprint  ·  click to fire';
-    return { focus: { x: p.x, y: p.y - 40 }, zoom: 1.5 };
+    return { offset: { x: 0, y: -40 }, zoom: 1.5, lockCamera: true };
   }
 
   if (n === 3) {
-    // Police chase: player in a car, four cruisers boxing in, stars at 4.
+    // Police chase: player in a car with four cruisers closing in, stars at 4.
     const car = makeCar({
       x: ROAD_X[2] + 30,
       y: ROAD_Y[1] + 150,
@@ -105,26 +105,49 @@ export function applyShot(world, index) {
     p.inCar = car;
     p.x = car.x;
     p.y = car.y;
+    // Rolling, so the chase reads as a chase rather than a stakeout.
+    car.vx = Math.cos(car.angle) * 250;
+    car.vy = Math.sin(car.angle) * 250;
+    car.speed = 250;
     p.money = 2350;
     p.health = 62;
     p.armor = 20;
     p.heat = 70;
     world.police.addHeat(p, 0);
     p.stars = 4;
-    for (let i = 0; i < 5; i++) {
-      const cop = world.police.spawnCop({ player: { x: car.x, y: car.y - 260, heading: Math.PI / 2 } });
+    // Frame the chase: the road ahead, the hero car low in the frame, and five cruisers
+    // stacked up the lane behind it. police.stage holds the formation so the composition
+    // survives the car rolling forward.
+    world.police.stage = true;
+    const slot = [
+      [-78, -155], [96, -200], [-16, -245], [-132, -292], [110, -338],
+    ];
+    for (let i = 0; i < slot.length; i++) {
+      const cop = world.police.spawnCop({ player: { x: car.x, y: car.y + slot[i][1], heading: Math.PI / 2 } });
       if (!cop) break;
-      cop.x = ROAD_X[2] + (i % 2 === 0 ? -30 : 30);
-      cop.y = car.y - 150 - i * 120;
+      cop.x = car.x + slot[i][0];
+      cop.y = car.y + slot[i][1];
       cop.angle = Math.PI / 2;
+      cop.stageOffset = slot[i];
       cop.vx = 0;
-      cop.vy = 180;
+      cop.vy = 260;
     }
     world.missionManager.start(4);
     world.missionManager.state = 'active';
-    world.missionManager.setStep(1);
-    world.hint = 'Lose them — break line of sight';
-    return { focus: { x: car.x, y: car.y - 130 }, zoom: 0.95 };
+    // The escape step, so the objective line reads like a chase rather than an errand.
+    world.missionManager.setStep(2);
+    world.missionManager.dialogueIndex = world.missionManager.dialogue.length;
+    // Clear the lane around the player so the staged frame stays at speed instead of
+    // braking for traffic, and so the cruisers read clearly.
+    // Clear the corridor: traffic and parked cars in the lane would brake the hero car
+    // mid-capture, and their headlights read as more cops. Nothing new spawns either,
+    // so the frame stays the frame.
+    world.cars = world.cars.filter((c) => c === car || c.driver === 'cop'
+      || Math.abs(c.x - car.x) > 130 || c.y < car.y - 560 || c.y > car.y + 300);
+    world.traffic.cars = world.cars.filter((c) => c.driver === 'traffic');
+    world.traffic.target = 0;
+    world.hint = 'WASD — drive  ·  SPACE — handbrake  ·  E — bail out';
+    return { offset: { x: 0, y: -165 }, zoom: 0.95, autoThrottle: 0.55, lockCamera: true };
   }
 
   // 4 — mission briefing over the street.
@@ -137,7 +160,7 @@ export function applyShot(world, index) {
   p.health = 92;
   p.armor = 60;
   p.stars = 0;
-  return { focus: { x: p.x, y: p.y }, zoom: 1.0 };
+  return { offset: { x: 0, y: 0 }, zoom: 1.0, lockCamera: true };
 }
 
 function addShotCars(world, list) {

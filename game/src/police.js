@@ -45,6 +45,23 @@ export class Police {
     const player = world.player;
     this.radar = Math.max(0, this.radar - dt);
 
+    // A staged screenshot asks the cruisers to hold a formation around the player, so
+    // the frame stays composed while the hero car keeps rolling.
+    if (this.stage) {
+      const anchor = player.inCar ?? player;
+      for (const car of this.cars) {
+        const off = car.stageOffset;
+        if (!off) continue;
+        car.x += (anchor.x + off[0] - car.x) * Math.min(1, dt * 6);
+        car.y += (anchor.y + off[1] - car.y) * Math.min(1, dt * 6);
+        car.angle = anchor.angle ?? car.angle;
+        car.vx = anchor.vx ?? 0;
+        car.vy = anchor.vy ?? 0;
+        car.speed = anchor.speed ?? 0;
+      }
+      return;
+    }
+
     if (player.stars <= 0) {
       this.releaseAll(world);
       player.heat = Math.max(0, player.heat - dt * 6);

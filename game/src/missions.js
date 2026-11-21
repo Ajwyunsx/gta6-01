@@ -445,12 +445,24 @@ export class MissionManager {
   }
 
   draw(ctx, camera, time) {
+    this.drawMarkers(ctx, camera, time);
+    this.drawEnemies(ctx, camera, time);
+  }
+
+  // Mission markers are drawn by main.js with the ground layer, so this half is often
+  // called on its own.
+  drawMarkers(ctx, camera, time) {
     for (const m of this.markers) {
       if (m.kind === 'none' || m.taken) continue;
       if (m.x < camera.x - 100 || m.y < camera.y - 100 || m.x > camera.x + camera.w + 100 || m.y > camera.y + camera.h + 100) continue;
       const color = m.kind === 'chase' ? '#ff4257' : m.kind === 'collect' ? '#ffd76a' : '#4fe3cd';
       drawMarker(ctx, m, color, time);
     }
+  }
+
+  // The crew spawned by a kill step. Each one is a small actor, so main.js asks for this
+  // after the scene pass and before the effects.
+  drawEnemies(ctx, camera, time) {
     for (const thug of this.enemies) {
       if (thug.x < camera.x - 60 || thug.y < camera.y - 60 || thug.x > camera.x + camera.w + 60 || thug.y > camera.y + camera.h + 60) continue;
       drawThug(ctx, thug, time);
