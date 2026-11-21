@@ -98,11 +98,13 @@
    * traffic stopped at the light, a car by the kerb to steal.
    */
   function onFoot(state) {
+    // On the pavement in front of a storefront, gold marker on the door, a car at the kerb.
+    // The eye should land on the player first, then follow his aim line into the block.
     const mid = Math.floor(PC.GRID / 2);
     const lot = PC.City.lotRect(mid, mid + 1);
-    const x = lot.x - 12;
-    const y = lot.y + lot.h * 0.55;
-    place(state, x, y, -Math.PI / 2 + 0.22);
+    const x = lot.x + lot.w * 0.5 - 6;
+    const y = lot.y + lot.h + 8;              // south pavement
+    place(state, x, y, -Math.PI / 2 + 0.1);
 
     state.mode = 'playing';
     state.player.cash = 1240;
@@ -112,20 +114,20 @@
     state.wanted.stars = 0;
     state.wanted.heat = 0;
     state.missions.state = 'idle';
-    state.missions.marker = { x: lot.x + lot.w * 0.5, y: lot.y + 40, r: 46, label: 'The job' };
+    state.missions.marker = { x: x + 4, y: lot.y + lot.h - 30, r: 46, label: 'The job' };
 
-    state.pickups.push({ kind: 'cash', x: x - 8, y: y - 78, taken: false, value: 60, bob: 0.6 });
+    state.pickups.push({ kind: 'cash', x: lot.x - 40, y: y - 96, taken: false, value: 60, bob: 0.6 });
 
+    // Shoppers on the far pavement and one crossing the street — never on a roof.
     state.peds.length = 0;
-    // People across the street, on the far pavement, so the player reads as alone on this one.
-    for (let i = 0; i < 6; i++) {
-      ped(state, lot.x + lot.w + 22, lot.y + 30 + i * 26, i % 2 ? Math.PI / 2 : -Math.PI / 2, 38);
+    for (let i = 0; i < 5; i++) {
+      ped(state, lot.x + lot.w + 26, lot.y + 26 + i * 30, i % 2 ? Math.PI / 2 : -Math.PI / 2, 38);
     }
-    ped(state, lot.x + 40, lot.y + lot.h - 16, Math.PI, 40);
-    ped(state, lot.x + 108, lot.y + lot.h - 16, 0, 40);
+    ped(state, lot.x - 84, y + 4, Math.PI / 2, 42);
+    ped(state, lot.x + lot.w + 96, y - 6, -Math.PI / 2, 42);
 
     // A car idling at the kerb, one lane over.
-    const car = PC.Vehicles.makeCar(lot.x - PC.ROAD / 2 - 30, y + 52, -Math.PI / 2, '#4f8fd4');
+    const car = PC.Vehicles.makeCar(lot.x - PC.ROAD / 2 - 34, y - 132, -Math.PI / 2, '#4f8fd4');
     state.parked.push(car);
   }
 
@@ -195,6 +197,67 @@
     PC.UI.toast(state.toasts, 'Three stars · coast patrol inbound', PC.PALETTE.danger);
   }
 
+  /**
+   * Shot 4: a mission in progress. Counter Service accepted, the marker on the bank across
+   * the street, a guard outside, the objective on the HUD.
+   */
+  function mission(state) {
+    // Counter Service: the bank on the corner, the gold arrow on its door, the player on the
+    // pavement with a drawn pistol, and the street clearing out behind him.
+    const mid = Math.floor(PC.GRID / 2);
+    const lot = PC.City.lotRect(mid - 2, mid - 2);
+    const doorX = lot.x + lot.w * 0.52;
+    const doorY = lot.y + lot.h - 26;
+    const x = doorX - 10;
+    const y = lot.y + lot.h + 12;
+    place(state, x, y, -Math.PI / 2 + 0.04);
+
+    state.mode = 'playing';
+    state.player.cash = 2150;
+    state.player.health = 96;
+    state.player.armour = 40;
+    state.player.ammo = 88;
+    state.wanted.stars = 0;
+    state.wanted.heat = 0;
+
+    state.missions.index = 1;
+    state.missions.state = 'active';
+    state.missions.phase = 'rob';
+    state.missions.timer = 3.1;
+    state.missions.marker = { x: doorX, y: doorY, r: 52, label: 'Sunstate Bank' };
+
+    // A guard at the door and one covering the pavement.
+    state.hostiles.length = 0;
+    const guard = PC.Police.makeOfficer(doorX + 26, doorY - 4, Math.PI / 2 + 0.4);
+    guard.kind = 'thug';
+    guard.shirt = '#333a48';
+    state.hostiles.push(guard);
+    const guard2 = PC.Police.makeOfficer(lot.x + 22, y - 18, 0.2);
+    guard2.kind = 'thug';
+    guard2.shirt = '#3c4152';
+    state.hostiles.push(guard2);
+
+    // Civilians spilling off the pavement, away from the door.
+    state.peds.length = 0;
+    for (let i = 0; i < 5; i++) {
+      const px = lot.x + lot.w + 24 + (i % 2) * 22;
+      const py = doorY + 14 + i * 26;
+      const p = ped(state, px, py, Math.PI / 2, 60);
+      p.panic = 3;
+    }
+    ped(state, lot.x - 70, y + 2, Math.PI / 2, 58).panic = 3;
+
+    // The getaway car at the kerb, facing north, engine running.
+    const car = PC.Vehicles.makeCar(x - 58, y - 116, -Math.PI / 2 + 0.03, '#20242e');
+    state.parked.push(car);
+
+    // A tracer from the player into the doorway: the job has just started.
+    state.effects.muzzle(x + 2, y - 18);
+    state.bullets.push(PC.Combat.makeBullet(x + 4, y - 26, -Math.PI / 2 + 0.03, 'player', 26));
+    state.effects.burst(doorX + 4, doorY + 6, 'spark', 5, 0.7);
+
+    PC.UI.toast(state.toasts, 'Counter Service · Sunstate Bank', PC.PALETTE.gold);
+  }
   /**
    * Shot 4: a mission in progress. Counter Service accepted, the marker on the bank across
    * the street, a guard outside, the objective on the HUD.
