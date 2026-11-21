@@ -1,9 +1,0 @@
-<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe3</title>
-<script>window.__e=[];window.onerror=function(m,f,l){window.__e.push(m+' @ '+f+':'+l);};</script></head>
-<body><div id="host"></div>
-<script>
-fetch('index.html').then(r=>r.text()).then(t=>{
-  // strip the probe's own tooling and run the page in a new window? simpler: report network+fragment
-  document.title='len='+t.length;
-});
-</script></body></html>
