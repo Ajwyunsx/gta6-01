@@ -3,24 +3,24 @@
     "name": "1-cover.jpg",
     "query": "?shot=1&frames=90",
     "viewport": { "width": 1280, "height": 720 },
-    "note": "The cover: northbound on the avenue at dusk, beach ahead, promenade full, traffic in both lanes."
+    "note": "The cover: northbound on the beach avenue, the promenade and the sea below, palms, café and hotel signs, traffic in both lanes, 27 on the speedo."
   },
   {
     "name": "2-onfoot.jpg",
-    "query": "?shot=2&frames=96",
+    "query": "?shot=2&frames=90",
     "viewport": { "width": 1280, "height": 720 },
-    "note": "On foot on the downtown pavement: gold job marker on the storefront door, cash pickup on the kerb, HUD and minimap up."
+    "note": "On foot on a downtown pavement: the gold job marker lit on the pawn shop door, pedestrians and parked traffic, health and armour bars up."
   },
   {
     "name": "3-police.jpg",
-    "query": "?shot=3&frames=120",
+    "query": "?shot=3&frames=90",
     "viewport": { "width": 1280, "height": 720 },
-    "note": "Three stars at a junction: cruiser nosing in, second broadside, officers out and firing, skid marks behind. More frames so the muzzle flash and tracers stay live for the capture."
+    "note": "Three stars at a junction: a cruiser nosing in from the north, a second broadside to the east, three officers out with pistols drawn, tracers and skids on the asphalt."
   },
   {
     "name": "4-mission.jpg",
-    "query": "?shot=4&frames=105",
+    "query": "?shot=4&frames=90",
     "viewport": { "width": 1280, "height": 720 },
-    "note": "Counter Service in progress: Sunstate Bank door marked, guards on the pavement, getaway car at the kerb, objective on the HUD."
+    "note": "Counter Service in progress: Sunstate Bank lit blue, teller and guard inside, getaway car at the kerb, objective and wanted banner on the HUD."
   }
 ]
