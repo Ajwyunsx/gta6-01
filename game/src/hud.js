@@ -8,12 +8,17 @@
   var C = PC.CONFIG, P = PC.PALETTE, U = PC.util;
 
   function makeHud() {
-    return {
+    var hud = {
       flashText: '', flashColor: '#fff', flashTimer: 0,
       bannerTitle: '', bannerSub: '', bannerTimer: 0,
       objectiveProgress: 0,
       mapShake: 0
     };
+    hud.flash = function (text, color) { flash(hud, text, color); };
+    hud.banner = function (title, sub) { banner(hud, title, sub); };
+    hud.update = function (dt) { update(hud, dt); };
+    hud.draw = function (ctx, world, t) { draw(hud, ctx, world, t); };
+    return hud;
   }
 
   function flash(hud, text, color) {

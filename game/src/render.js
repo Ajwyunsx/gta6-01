@@ -61,7 +61,7 @@
 
     drawLight(ctx, world, view);
     drawVignette(ctx);
-    PC.hud.draw(world.hud, ctx, world, t);
+    world.hud.draw(ctx, world, t);
     if (world.over) drawOver(ctx, world);
   }
 

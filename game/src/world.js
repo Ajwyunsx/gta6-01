@@ -147,7 +147,7 @@
     PC.missions.update(world.missions, world, dt);
     PC.combat.updatePickups(world, dt);
     PC.effects.update(world.effects, dt);
-    PC.hud.update(world.hud, dt);
+    world.hud.update(dt);
 
     // --- top up the street population around the player
     if (world.traffic.length < C.TRAFFIC.max) {
