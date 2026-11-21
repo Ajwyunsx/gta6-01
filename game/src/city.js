@@ -5,8 +5,14 @@
 import { WORLD, GRID, ROAD_X, ROAD_Y, COLORS } from './config.js';
 import { makeRng, hashFloat } from './random.js';
 
-const TOWER_TINTS = ['#2b2a3d', '#323046', '#262638', '#38334a', '#2e2a3a', '#343140'];
-const LOW_TINTS = ['#3d3140', '#453645', '#3a3346', '#4a3a44', '#40354a', '#4b4147'];
+const TOWER_TINTS = ['#4a3f74', '#544679', '#413f74', '#5a4570', '#3f3a6e', '#5c4c80'];
+const LOW_TINTS = ['#6b4560', '#75506a', '#5d4569', '#7d5062', '#664a5c', '#80576a', '#574d70'];
+const NEON_SIGNS = ['#ff5f9e', '#4fe3cd', '#ffc061', '#7a5cff', '#ff6b52', '#63d4ff'];
+// Rooftops carry the city's districts: cool slate downtown, warm sand and terracotta
+// along the beach, deeper plum blocks in the nightlife quarter.
+const ROOF_TOWER = ['#5a5180', '#665a8c', '#51497a', '#6f5f92', '#5c5588'];
+const ROOF_LOW = ['#6b5c7e', '#7d6786', '#5f5478', '#866c7c', '#6a5b80'];
+const ROOF_BEACH = ['#b08a72', '#c49a7c', '#9a7a6a', '#cfa27a', '#b89480', '#d6ac84'];
 
 // The city is generated once from the seed and never mutated afterwards, so the
 // same ?seed= always opens the same Palm City.
@@ -61,10 +67,10 @@ export function buildCity(seed = 1) {
   scatterStreetProps(city);
 
   city.districts = [
-    { name: 'Kestrel Heights', x: ROAD_X[1], y: ROAD_Y[0], w: ROAD_X[4] - ROAD_X[1], h: ROAD_Y[2] - ROAD_Y[0], tone: 'towers' },
-    { name: 'Neon Row', x: ROAD_X[0], y: ROAD_Y[2], w: ROAD_X[3] - ROAD_X[0], h: ROAD_Y[4] - ROAD_Y[2], tone: 'nightlife' },
-    { name: 'Marisol Beach', x: ROAD_X[4], y: ROAD_Y[0], w: WORLD.width - ROAD_X[4], h: WORLD.height, tone: 'beach' },
-    { name: 'Dockside', x: ROAD_X[0], y: ROAD_Y[3], w: ROAD_X[3] - ROAD_X[0], h: WORLD.height - ROAD_Y[3], tone: 'industrial' },
+    { name: 'Kestrel Heights', x: ROAD_X[1], y: ROAD_Y[0], w: ROAD_X[3] - ROAD_X[1], h: ROAD_Y[2] - ROAD_Y[0], tone: 'towers' },
+    { name: 'Neon Row', x: ROAD_X[0], y: ROAD_Y[1], w: ROAD_X[2] - ROAD_X[0], h: ROAD_Y[3] - ROAD_Y[1], tone: 'nightlife' },
+    { name: 'Marisol Beach', x: WORLD.beachX, y: 0, w: WORLD.width - WORLD.beachX, h: WORLD.height, tone: 'beach' },
+    { name: 'Dockside', x: ROAD_X[0], y: ROAD_Y[2], w: ROAD_X[2] - ROAD_X[0], h: WORLD.beachY - ROAD_Y[2], tone: 'industrial' },
   ];
 
   city.minimap = buildMinimapImage(city);
@@ -82,52 +88,90 @@ function pickBlockKind(rng, c, r, nearBeach, downtown) {
 }
 
 function buildBlockBuildings(city, block, rng, opts) {
-  const pad = 26;
+  // A block is a ring of buildings around a courtyard, like a real city block: the
+  // sidewalk ring stays clear, the footprints sit inside it, and alleys cut between.
+  const pad = 58;
   const x = block.x + pad;
   const y = block.y + pad;
   const w = block.w - pad * 2;
   const h = block.h - pad * 2;
+  const alley = 30;
 
-  // Split the block into one to four lots, then one tall or two short buildings a lot.
-  const splitX = rng.chance(0.55) ? 1 : 2;
-  const splitY = rng.chance(0.5) ? 1 : 2;
+  const splitX = opts.downtown ? 2 : rng.pick([3, 3, 2, 4]);
+  const splitY = opts.downtown ? 2 : rng.pick([2, 3, 3, 2]);
+  const lw = (w - alley * (splitX - 1)) / splitX;
+  const lh = (h - alley * (splitY - 1)) / splitY;
+
   for (let cx = 0; cx < splitX; cx++) {
     for (let cy = 0; cy < splitY; cy++) {
-      const lw = w / splitX;
-      const lh = h / splitY;
-      const lx = x + cx * lw + 5;
-      const ly = y + cy * lh + 5;
-      const innerW = lw - 10;
-      const innerH = lh - 10;
-      const towers = opts.downtown ? rng.chance(0.72) : rng.chance(0.2);
-      if (towers) {
-        const bw = innerW * rng.float(0.6, 0.95);
-        const bh = innerH * rng.float(0.6, 0.95);
-        addBuilding(city, lx + rng.float(0, innerW - bw), ly + rng.float(0, innerH - bh), bw, bh, rng, {
-          tall: true,
-          tint: rng.pick(TOWER_TINTS),
+      const lx = x + cx * (lw + alley);
+      const ly = y + cy * (lh + alley);
+      // Each lot holds one footprint with a little breathing room, so roofs read as separate.
+      const inset = rng.float(2, 10);
+      const footprints = rng.chance(0.55) ? 2 : 1;
+      if (footprints === 2) {
+        // Two narrow neighbours sharing a party wall line.
+        const bh = lh - inset * 2;
+        const bw = (lw - inset * 2 - 8) / 2;
+        const towerA = opts.downtown ? rng.chance(0.6) : rng.chance(0.18);
+        addBuilding(city, lx + inset, ly + inset, bw, bh, rng, {
+          tall: towerA,
+          tint: rng.pick(towerA ? TOWER_TINTS : LOW_TINTS),
+          block,
+        });
+        const towerB = opts.downtown ? rng.chance(0.45) : rng.chance(0.2);
+        addBuilding(city, lx + inset + bw + 8, ly + inset, bw, bh, rng, {
+          tall: towerB,
+          tint: rng.pick(towerB ? TOWER_TINTS : LOW_TINTS),
+          block,
         });
       } else {
-        const rows2 = rng.chance(0.45) ? 2 : 1;
-        for (let k = 0; k < rows2; k++) {
-          const bw = innerW * rng.float(0.55, 0.92);
-          const bh = (innerH / rows2) * rng.float(0.55, 0.88);
-          addBuilding(city, lx + rng.float(0, innerW - bw), ly + (innerH / rows2) * k + 4, bw, bh, rng, {
-            tall: false,
-            tint: rng.pick(LOW_TINTS),
-          });
-        }
-      }
-      if (rng.chance(0.3)) {
-        city.lots.push({ x: lx, y: ly, w: innerW, h: innerH, kind: 'yard' });
-        city.parkingSpots.push({ x: lx + innerW - 46, y: ly + innerH * 0.4, facing: Math.PI / 2 });
+        const tall = opts.downtown ? rng.chance(0.78) : rng.chance(0.16);
+        const bw = lw - inset * 2;
+        const bh = lh - inset * 2;
+        addBuilding(city, lx + inset, ly + inset, bw, bh, rng, {
+          tall,
+          tint: rng.pick(tall ? TOWER_TINTS : LOW_TINTS),
+          block,
+        });
       }
     }
+  }
+
+  // Shopfront neon on the sidewalks facing the streets, plus a few parking stalls.
+  const front = rng.chance(0.75);
+  if (front) {
+    const edge = rng.int(0, 3);
+    const count = rng.int(2, 4);
+    for (let i = 0; i < count; i++) {
+      const t = (i + 0.5) / count;
+      let sx;
+      let sy;
+      if (edge === 0) { sx = x + w * t; sy = block.y + 10; }
+      else if (edge === 1) { sx = x + w * t; sy = block.y + block.h - 10; }
+      else if (edge === 2) { sx = block.x + 10; sy = y + h * t; }
+      else { sx = block.x + block.w - 10; sy = y + h * t; }
+      city.props.push({
+        kind: 'shop',
+        x: sx,
+        y: sy,
+        rot: edge < 2 ? 0 : Math.PI / 2,
+        color: rng.pick(NEON_SIGNS),
+        w: rng.float(26, 54),
+        h: 8,
+      });
+    }
+  }
+  if (rng.chance(0.35)) {
+    city.parkingSpots.push({ x: x + w - 44, y: block.y + block.h - 26, facing: -Math.PI / 2 });
   }
 }
 
 function addBuilding(city, x, y, w, h, rng, opts) {
-  if (w < 40 || h < 40) return;
+  if (w < 34 || h < 34) return;
+  const blockCol = opts.block?.col ?? 0;
+  const blockRow = opts.block?.row ?? 0;
+  const beach = blockCol >= 4 || blockRow >= 3;
   const b = {
     x,
     y,
@@ -135,10 +179,17 @@ function addBuilding(city, x, y, w, h, rng, opts) {
     h,
     tint: opts.tint,
     tower: opts.tall,
-    lit: 0.35 + rng.float(0, 0.4),
+    lit: 0.3 + rng.float(0, 0.45),
     seed: rng.int(1, 99999),
-    neon: rng.chance(opts.tall ? 0.55 : 0.3) ? rng.pick(['#ff5f9e', '#4fe3cd', '#ffc061', '#7a5cff']) : null,
-    roof: rng.chance(0.5) ? '#1d1b27' : '#22202d',
+    neon: rng.chance(opts.tall ? 0.6 : 0.42) ? rng.pick(NEON_SIGNS) : null,
+    roof: beach ? rng.pick(ROOF_BEACH) : opts.tall ? rng.pick(ROOF_TOWER) : rng.pick(ROOF_LOW),
+    height: rng.float(0.55, 1.9),
+    col: blockCol,
+    row: blockRow,
+    sign: rng.chance(0.34) ? rng.pick(['BAR', 'HOTEL', '24H', 'CAFE', 'PAWN', 'SURF', 'DINER', 'CLUB', 'TATTOO', 'LIQUOR']) : null,
+    water: rng.chance(0.25),
+    pool: beach && rng.chance(0.45),
+    ac: rng.int(1, 4),
   };
   city.buildings.push(b);
 }
@@ -320,4 +371,19 @@ function buildMinimapImage(city) {
 export function findSpawn(city) {
   const b = city.sidewalks.find((s) => s.col === 2 && s.row === 2) ?? city.sidewalks[0];
   return { x: b.x + b.w / 2, y: b.y + b.h / 2 };
+}
+
+// Nudge a point to the nearest open ground inside the same district, so a mission
+// marker never lands inside a tower when the block layout changes.
+export function safePoint(city, x, y) {
+  if (walkable(city, x, y, 16)) return { x, y };
+  for (let r = 20; r <= 520; r += 20) {
+    for (let a = 0; a < 12; a++) {
+      const ang = (a / 12) * Math.PI * 2 + r * 0.01;
+      const px = x + Math.cos(ang) * r;
+      const py = y + Math.sin(ang) * r;
+      if (walkable(city, px, py, 16)) return { x: px, y: py };
+    }
+  }
+  return { x, y };
 }

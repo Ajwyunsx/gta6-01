@@ -6,11 +6,12 @@
 import { makeCar } from './entities.js';
 import { ROAD_X, ROAD_Y, WORLD } from './config.js';
 import { angleTo, clamp, randomRange } from './random.js';
+import { safePoint } from './city.js';
 
-const CORAL_ROOM = { x: ROAD_X[1] + 380, y: ROAD_Y[2] - 250 };
-const MARINA = { x: 4620, y: 2960 };
-const DOCKS = { x: 640, y: 3120 };
-const LOT = { x: ROAD_X[3] + 120, y: ROAD_Y[1] + 90 };
+const CORAL_ROOM = { x: ROAD_X[1] + 360, y: ROAD_Y[1] - 250 };
+const MARINA = { x: 3260, y: 2160 };
+const DOCKS = { x: 760, y: 2180 };
+const LOT = { x: ROAD_X[3] + 140, y: ROAD_Y[1] + 90 };
 
 export const CAST = {
   rio: 'Rio Calloway',
@@ -44,7 +45,7 @@ export const MISSIONS = [
     brief: 'Three people owe Dessa money and none of them are answering the phone. Go collect. Bring cash, not excuses.',
     reward: 220,
     steps: [
-      { type: 'collect', count: 3, spread: [[ROAD_X[2] + 220, ROAD_Y[3] - 160], [ROAD_X[4] - 200, ROAD_Y[2] + 150], [ROAD_X[1] - 120, ROAD_Y[0] + 160]], title: 'Debts', text: 'Collect three debts around Palm City.' },
+      { type: 'collect', count: 3, spread: [[ROAD_X[2] + 220, ROAD_Y[1] - 120], [ROAD_X[3] - 200, ROAD_Y[2] + 150], [ROAD_X[1] - 120, ROAD_Y[0] + 160]], title: 'Debts', text: 'Collect three debts around Palm City.' },
       { type: 'goto', x: CORAL_ROOM.x, y: CORAL_ROOM.y, title: 'Coral Room', text: 'Bring the money back to the Coral Room.', radius: 60 },
     ],
     dialogue: [
@@ -60,7 +61,7 @@ export const MISSIONS = [
     brief: "Bram Tulley's courier is carrying the ledger that says exactly how much Dessa owes him. Catch the car and take it. Do not let it reach the bridge.",
     reward: 320,
     steps: [
-      { type: 'chase', title: 'Courier', text: "Chase down Bram's courier and stop the car.", start: [ROAD_X[3] + 60, ROAD_Y[1] + 40] },
+      { type: 'chase', title: 'Courier', text: "Chase down Bram's courier and stop the car.", start: [ROAD_X[2] + 60, ROAD_Y[1] + 40] },
       { type: 'goto', x: CORAL_ROOM.x, y: CORAL_ROOM.y, title: 'Coral Room', text: 'Take the ledger back to the Coral Room.', radius: 60 },
     ],
     dialogue: [
@@ -176,6 +177,23 @@ export class MissionManager {
     this.escaped = false;
     this.missionBanner = 0;
     this.flashStep = 0;
+    // Snap every authored marker onto open ground for this city's block layout, so a
+    // step never sends the player into the side of a tower.
+    for (const mission of MISSIONS) {
+      for (const step of mission.steps ?? []) {
+        if (step.type === 'goto') Object.assign(step, safePoint(city, step.x, step.y));
+        if (step.type === 'collect') {
+          step.spread = step.spread.map(([x, y]) => {
+            const p = safePoint(city, x, y);
+            return [p.x, p.y];
+          });
+        }
+        if (step.type === 'chase') {
+          const p = safePoint(city, step.start[0], step.start[1]);
+          step.start = [p.x, p.y];
+        }
+      }
+    }
   }
 
   get mission() {
@@ -244,9 +262,8 @@ export class MissionManager {
       const base = this.markersBaseForKill();
       for (let k = 0; k < step.count; k++) {
         const a = (k / step.count) * Math.PI * 2;
-        const x = base.x + Math.cos(a) * randomRange(90, 170);
-        const y = base.y + Math.sin(a) * randomRange(70, 150);
-        this.enemies.push(new Thug(x, y, this.rng));
+        const raw = safePoint(this.city, base.x + Math.cos(a) * randomRange(90, 170), base.y + Math.sin(a) * randomRange(70, 150));
+        this.enemies.push(new Thug(raw.x, raw.y, this.rng));
       }
       this.killCount = 0;
     } else if (step.type === 'escape') {
@@ -256,8 +273,8 @@ export class MissionManager {
   }
 
   markersBaseForKill() {
-    if (this.mission.id === 'static') return DOCKS;
-    if (this.mission.id === 'buy-in') return MARINA;
+    if (this.mission.id === 'static') return safePoint(this.city, DOCKS.x, DOCKS.y);
+    if (this.mission.id === 'buy-in') return safePoint(this.city, MARINA.x, MARINA.y);
     return { x: this.mission.steps[0].x ?? 0, y: this.mission.steps[0].y ?? 0 };
   }
 

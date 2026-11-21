@@ -33,7 +33,7 @@ export function makeCar(props = {}) {
 }
 
 const SKINS = ['#c98d6b', '#8f5f45', '#e3b18f', '#6f452f', '#d9a179', '#a2714f'];
-const SHIRTS = ['#e2679b', '#4fb5a8', '#e8c46a', '#8f7bd6', '#d96a5a', '#6aa3d9', '#d8d3e2', '#7fbf78', '#c05f9b'];
+const SHIRTS = ['#d2568a', '#3f9b91', '#d4ae5c', '#7b68bd', '#c05a4c', '#5b8fc0', '#c9c3d6', '#6fa96a', '#a8558c', '#8a8fa8', '#b5764c'];
 
 export class Ped {
   constructor(x, y, rng) {

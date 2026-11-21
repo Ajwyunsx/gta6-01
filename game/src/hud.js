@@ -281,10 +281,10 @@ function drawHint(ctx, w, h, world) {
   if (!hint) return;
   ctx.font = '700 12px ui-sans-serif, system-ui, sans-serif';
   const tw = ctx.measureText(hint).width + 30;
-  panel(ctx, w / 2 - tw / 2, h - 214, tw, 30, 0.8);
+  panel(ctx, w / 2 - tw / 2, h - 252, tw, 30, 0.8);
   ctx.textAlign = 'center';
   ctx.fillStyle = 'rgba(255,255,255,0.8)';
-  ctx.fillText(hint, w / 2, h - 194);
+  ctx.fillText(hint, w / 2, h - 232);
 }
 
 export function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
