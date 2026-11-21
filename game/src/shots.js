@@ -38,27 +38,35 @@ export function applyShot(world, index) {
     world.missionManager.start(2);
     world.missionManager.state = 'active';
     world.missionManager.setStep(0);
+    // Objective line only — the briefing box would eat half the frame in a still.
+    world.missionManager.dialogueIndex = world.missionManager.dialogue.length;
     world.combat.addPickup(avenue + 120, 1460, 'cash', 60);
+    // Own lane stays clear so the car actually rolls; the oncoming lane and the far
+    // block behind carry the traffic that makes the street read as alive.
+    // Traffic lives in the opposite lane (and one car well ahead in ours), so nothing can
+    // rear-end the hero two frames in and spin it sideways mid-capture.
     addShotCars(world, [
-      [avenue - 30, 1700, Math.PI / 2, '#4f9fb8'],
-      [avenue - 30, 1830, Math.PI / 2, '#d8b25f'],
-      [avenue + 30, 1300, -Math.PI / 2, '#8a7bd8'],
-      [avenue - 30, 1170, Math.PI / 2, '#c9a227'],
+      [avenue - 30, 1720, Math.PI / 2, '#4f9fb8'],
+      [avenue - 30, 1500, Math.PI / 2, '#d8b25f'],
+      [avenue - 30, 1210, Math.PI / 2, '#c9a227'],
+      [avenue - 30, 940, Math.PI / 2, '#c8556f'],
+      [avenue + 30, 980, -Math.PI / 2, '#8a7bd8'],
+      [avenue + 30, 560, -Math.PI / 2, '#7ec8a0'],
     ]);
+    for (const c of world.cars) {
+      if (c.staged) c.vy = c.vy > 0 ? 210 : -240;
+    }
     addShotPeds(world, [
       [avenue + 96, 1620], [avenue + 118, 1440], [avenue - 96, 1660], [avenue + 90, 1360],
     ]);
-    for (let i = 0; i < 3; i++) {
-      const cop = world.police.spawnCop({ player: { x: car.x, y: car.y + 320, heading: -Math.PI / 2 } });
-      if (!cop) break;
-      cop.x = avenue + (i % 2 === 0 ? -30 : 30);
-      cop.y = car.y + 260 + i * 110;
-      cop.angle = -Math.PI / 2;
-      cop.vx = 0;
-      cop.vy = -220;
-    }
-    world.hint = 'E — get out  ·  SPACE — handbrake';
-    return { offset: { x: 0, y: 6 }, zoom: 1.0, autoThrottle: 0.42, lockCamera: true };
+    // Ambient traffic keeps spawning on its own schedule and was parking itself on top
+    // of the hero. Keep only the staged cars, the cruisers, and anything genuinely far away.
+    world.cars = world.cars.filter((c) => c === car || c.staged
+      || Math.hypot(c.x - car.x, c.y - car.y) > 300);
+    world.traffic.cars = world.cars.filter((c) => c.driver === 'traffic');
+    world.traffic.target = 0;
+    world.hint = 'W  — accelerate  ·  A/D — steer  ·  E — get out';
+    return { offset: { x: 0, y: -30 }, zoom: 1.0, autoThrottle: 1, lockCamera: true };
   }
 
   if (n === 2) {
@@ -169,6 +177,7 @@ function addShotCars(world, list) {
     car.traffic = { lane: 1, dirX: 0, dirY: 1, nodeIndex: 0, route: [{ x, y: y + 600 }], target: { x, y: y + 600 } };
     car.vx = Math.cos(angle) * 60;
     car.vy = Math.sin(angle) * 60;
+    car.staged = true;
     world.cars.push(car);
   }
 }
