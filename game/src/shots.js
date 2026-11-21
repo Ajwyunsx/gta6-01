@@ -52,9 +52,10 @@ export function applyShot(world, index) {
     addShotCars(world, [
       // Placed where the shutter sees them, and held there: a car given a velocity for
       // 1.15 s of load grace ends up half a block from where the shot was composed.
-      [avenue + 30, 1300, -Math.PI / 2, '#8a7bd8'],
-      [avenue - 30, 1382, Math.PI / 2, '#4f9fb8'],
-      [avenue - 30, 1620, Math.PI / 2, '#d8b25f'],
+      [avenue + 30, 1392, -Math.PI / 2, '#8a7bd8'],
+      [avenue - 30, 1478, Math.PI / 2, '#4f9fb8'],
+      [avenue - 30, 1732, Math.PI / 2, '#d8b25f'],
+      [avenue + 30, 1770, -Math.PI / 2, '#7ec8a0'],
     ]);
     for (const c of world.cars) {
       if (!c.staged) continue;
@@ -72,6 +73,10 @@ export function applyShot(world, index) {
     world.traffic.target = 0;
     // No tutorial hint on the cover: it lands dead centre and cuts the hero car in half.
     world.hint = '';
+    // Two stars on the HUD, but no cruisers in shot: a patrol car drifting in from the top
+    // left kept parking itself under the health bar.
+    world.police.cars.length = 0;
+    world.police.stage = true;
     return { offset: { x: 0, y: -124 }, zoom: 1.26, stageSpeed: 330, lockCamera: true };
   }
 

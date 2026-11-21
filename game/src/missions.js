@@ -331,7 +331,8 @@
   function drawMarkers(ms, ctx, cam, t) {
     var m = markerFor(ms, null);
     if (!m) return;
-    if (m.x < cam.x - 60 || m.x > cam.x + C.VW + 60 || m.y < cam.y - 60 || m.y > cam.y + C.VH + 60) return;
+    var vw = cam.w || C.VW, vh = cam.h || C.VH;
+    if (m.x < cam.x - 60 || m.x > cam.x + vw + 60 || m.y < cam.y - 60 || m.y > cam.y + vh + 60) return;
     var pulse = 1 + Math.sin(t * 3.4) * 0.12;
     ctx.save();
     ctx.translate(m.x, m.y);

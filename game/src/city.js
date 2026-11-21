@@ -213,9 +213,12 @@
 
   /* ---------- drawing ---------- */
 
-  function visibleRange(cam, top, bottom) {
-    return { x0: Math.max(0, Math.floor((cam.x - 80) / CELL)), x1: Math.min(GRID, Math.ceil((cam.x + C.VW + 80) / CELL)),
-             y0: Math.max(0, Math.floor((cam.y - 80) / CELL)), y1: Math.min(GRID, Math.ceil((cam.y + C.VH + 80) / CELL)) };
+  function viewW(cam) { return cam.w || C.VW; }
+  function viewH(cam) { return cam.h || C.VH; }
+
+  function visibleRange(cam) {
+    return { x0: Math.max(0, Math.floor((cam.x - 80) / CELL)), x1: Math.min(GRID, Math.ceil((cam.x + viewW(cam) + 80) / CELL)),
+             y0: Math.max(0, Math.floor((cam.y - 80) / CELL)), y1: Math.min(GRID, Math.ceil((cam.y + viewH(cam) + 80) / CELL)) };
   }
 
   function draw(city, ctx, cam, t) {
@@ -232,7 +235,7 @@
   function drawGround(city, ctx, cam) {
     // Sand base everywhere: the city sits on it and the beach continues it to the water.
     ctx.fillStyle = P.sand;
-    ctx.fillRect(cam.x - 40, cam.y - 40, C.VW + 80, C.VH + 80);
+    ctx.fillRect(cam.x - 400, cam.y - 400, viewW(cam) + 800, viewH(cam) + 800);
 
     var r = visibleRange(cam);
     // Blocks: sidewalk slab + interior ground.
@@ -255,8 +258,8 @@
     ctx.fillStyle = P.asphalt;
     for (var i = 0; i <= GRID; i++) {
       var p = i * CELL;
-      ctx.fillRect(p - HALF_ROAD, Math.max(0, cam.y - 40), ROAD, Math.min(CITY_H, cam.y + C.VH + 80) - Math.max(0, cam.y - 40));
-      ctx.fillRect(Math.max(0, cam.x - 40), p - HALF_ROAD, Math.min(CITY_W, cam.x + C.VW + 80) - Math.max(0, cam.x - 40), ROAD);
+      ctx.fillRect(p - HALF_ROAD, Math.max(0, cam.y - 40), ROAD, Math.min(CITY_H, cam.y + viewH(cam) + 80) - Math.max(0, cam.y - 40));
+      ctx.fillRect(Math.max(0, cam.x - 40), p - HALF_ROAD, Math.min(CITY_W, cam.x + viewW(cam) + 80) - Math.max(0, cam.x - 40), ROAD);
     }
     // Beach promenade, sand and sea.
     drawBeach(city, ctx, cam);
@@ -264,7 +267,7 @@
 
   function drawBeach(city, ctx, cam) {
     var top = BEACH_TOP;
-    if (cam.y + C.VH < top - 60) return;
+    if (cam.y + viewH(cam) < top - 60) return;
 
     // boardwalk band under the city edge
     ctx.fillStyle = P.sandDark;
@@ -326,11 +329,11 @@
     ctx.setLineDash([26, 22]);
     for (var i = 1; i < GRID; i++) {
       var p = i * CELL;
-      if (p > cam.x - 60 && p < cam.x + C.VW + 60) {
-        ctx.beginPath(); ctx.moveTo(p, Math.max(0, cam.y)); ctx.lineTo(p, Math.min(CITY_H, cam.y + C.VH)); ctx.stroke();
+      if (p > cam.x - 60 && p < cam.x + viewW(cam) + 60) {
+        ctx.beginPath(); ctx.moveTo(p, Math.max(0, cam.y)); ctx.lineTo(p, Math.min(CITY_H, cam.y + viewH(cam))); ctx.stroke();
       }
-      if (p > cam.y - 60 && p < cam.y + C.VH + 60) {
-        ctx.beginPath(); ctx.moveTo(Math.max(0, cam.x), p); ctx.lineTo(Math.min(CITY_W, cam.x + C.VW), p); ctx.stroke();
+      if (p > cam.y - 60 && p < cam.y + viewH(cam) + 60) {
+        ctx.beginPath(); ctx.moveTo(Math.max(0, cam.x), p); ctx.lineTo(Math.min(CITY_W, cam.x + viewW(cam)), p); ctx.stroke();
       }
     }
     ctx.setLineDash([]);
@@ -339,7 +342,7 @@
     for (var gy = 0; gy <= GRID; gy++) {
       for (var gx = 0; gx <= GRID; gx++) {
         var cx = gx * CELL, cy = gy * CELL;
-        if (cx < cam.x - 160 || cx > cam.x + C.VW + 160 || cy < cam.y - 160 || cy > cam.y + C.VH + 160) continue;
+        if (cx < cam.x - 160 || cx > cam.x + viewW(cam) + 160 || cy < cam.y - 160 || cy > cam.y + viewH(cam) + 160) continue;
         for (var s = -HALF_ROAD + 10; s < HALF_ROAD - 6; s += 16) {
           ctx.fillRect(cx + s, cy - HALF_ROAD - 16, 9, 12);
           ctx.fillRect(cx + s, cy + HALF_ROAD + 4, 9, 12);
@@ -355,7 +358,7 @@
     // Long south-east shadows from every building, before props and roofs.
     for (var i = 0; i < city.buildings.length; i++) {
       var bd = city.buildings[i];
-      if (bd.x + bd.w < cam.x - 120 || bd.x > cam.x + C.VW + 120 || bd.y + bd.h < cam.y - 120 || bd.y > cam.y + C.VH + 120) continue;
+      if (bd.x + bd.w < cam.x - 120 || bd.x > cam.x + viewW(cam) + 120 || bd.y + bd.h < cam.y - 120 || bd.y > cam.y + viewH(cam) + 120) continue;
       var off = 14 + bd.floors * 5;
       ctx.fillRect(bd.x + off, bd.y + off * 0.7, bd.w, bd.h);
       ctx.fillRect(bd.x + bd.w, bd.y + off * 0.7, off, bd.h);
@@ -392,7 +395,7 @@
   }
 
   function inView(x, y, cam) {
-    return x > cam.x - 220 && x < cam.x + C.VW + 220 && y > cam.y - 220 && y < cam.y + C.VH + 220;
+    return x > cam.x - 220 && x < cam.x + viewW(cam) + 220 && y > cam.y - 220 && y < cam.y + viewH(cam) + 220;
   }
 
   function drawBlockProp(ctx, p, t) {
