@@ -366,6 +366,7 @@
   };
 
   World.prototype.updateEnterHint = function () {
+    if (this.shotCam) { this.enterHint = null; return; }
     if (this.player.inCar) {
       this.enterHint = { text: 'E — get out', x: this.player.x, y: this.player.y };
       return;

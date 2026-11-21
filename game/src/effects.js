@@ -14,7 +14,6 @@
     this.shakeAmount = 0;
     this.smokeClock = 0;
   }
-
   Effects.prototype.burst = function (x, y, color, count) {
     var rng = this.rng;
     for (var k = 0; k < count; k++) {

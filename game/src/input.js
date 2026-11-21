@@ -20,6 +20,7 @@
 
   Input.prototype.bind = function () {
     var self = this;
+    var canvas = this.canvas;
     var map = {
       KeyW: 'up', ArrowUp: 'up',
       KeyS: 'down', ArrowDown: 'down',

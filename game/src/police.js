@@ -146,6 +146,12 @@
     var T = CFG.tuning;
     var player = world.player;
 
+    // In a staged screenshot scene the department holds still: the cars are placed by hand.
+    if (world.shotCam) {
+      this.sirenOn = this.stars > 0;
+      return;
+    }
+
     // quiet time only counts while the player is out of sight, or when heat is low
     var near = false;
     for (var k = 0; k < this.units.length; k++) {

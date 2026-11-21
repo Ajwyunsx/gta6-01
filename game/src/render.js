@@ -10,7 +10,7 @@
   var U = PC.U;
   var C = CFG.colors;
 
-  var SUN = { dx: 0.30, dy: 0.22 };   // extrusion direction, in units of building height
+  var SUN = { dx: 0.40, dy: 0.30 };   // extrusion direction, in units of building height
 
   function Renderer(canvas) {
     this.canvas = canvas;
@@ -423,7 +423,6 @@
     var hgt = b.hgt;
     var ox = hgt * SUN.dx;
     var oy = hgt * SUN.dy;
-
     // ground shadow, soft and long
     ctx.save();
     ctx.globalAlpha = 0.28;
@@ -438,7 +437,7 @@
     ctx.restore();
 
     // the two visible walls (south and east) - darker sides catch less sun
-    ctx.fillStyle = U.shade(b.color, -52);
+    ctx.fillStyle = U.shade(b.color, -78);
     ctx.beginPath();
     ctx.moveTo(b.x, b.y + b.h);
     ctx.lineTo(b.x + b.w, b.y + b.h);
@@ -447,7 +446,7 @@
     ctx.closePath();
     ctx.fill();
 
-    ctx.fillStyle = U.shade(b.color, -30);
+    ctx.fillStyle = U.shade(b.color, -46);
     ctx.beginPath();
     ctx.moveTo(b.x + b.w, b.y);
     ctx.lineTo(b.x + b.w, b.y + b.h);
@@ -837,11 +836,12 @@
   // ---- air effects -----------------------------------------------------------
   Renderer.prototype.drawAirFX = function (ctx, world, view) {
     var fx = world.effects;
+    var tracers = world.combat.tracers;
     // bullets
     ctx.save();
     ctx.lineCap = 'round';
-    for (var k = 0; k < fx.tracers.length; k++) {
-      var t = fx.tracers[k];
+    for (var k = 0; k < tracers.length; k++) {
+      var t = tracers[k];
       var a = U.clamp(t.life / t.max, 0, 1);
       ctx.globalAlpha = a;
       ctx.strokeStyle = '#ffe9ae';

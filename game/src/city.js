@@ -50,8 +50,8 @@
         var kind;
         if (i === CFG.GRID - 1 && (j === 1 || j === 4)) kind = 'beachclub';
         else if (centre <= 1) kind = rng() < 0.72 ? 'tower' : 'midrise';
-        else if (centre <= 3) kind = rng() < 0.4 ? 'midrise' : rng() < 0.55 ? 'row' : 'park';
-        else kind = rng() < 0.34 ? 'park' : rng() < 0.5 ? 'lot' : rng() < 0.72 ? 'row' : 'midrise';
+        else if (centre <= 3) kind = rng() < 0.44 ? 'midrise' : rng() < 0.78 ? 'row' : 'park';
+        else kind = rng() < 0.22 ? 'park' : rng() < 0.52 ? 'lot' : rng() < 0.80 ? 'row' : 'midrise';
         var block = {
           i: i, j: j, x: rect.x, y: rect.y, w: rect.w, h: rect.h, kind: kind,
           district: DISTRICTS[(i + j * 2) % DISTRICTS.length],
@@ -74,7 +74,7 @@
   // ---- buildings -------------------------------------------------------------
   City.prototype.addBuilding = function (x, y, w, h, floors, kind, sign) {
     var rng = this.rng;
-    var hgt = 26 + floors * 15 + rng() * 10;
+    var hgt = 44 + floors * 36 + rng() * 18;
     var palette = CFG.colors.building;
     var tops = CFG.colors.buildingTop;
     var pick = Math.floor(rng() * palette.length);

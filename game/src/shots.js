@@ -5,9 +5,22 @@
   'use strict';
   var PC = window.PC;
   var CFG = PC.CFG;
-  var U = PC.U;
 
-  // Place the player car exactly, kill its speed and point it down a named heading.
+  var AVENUE = CFG.GRID * CFG.CELL + CFG.ROAD / 2;   // the beach-side avenue's centre line
+
+  function copCar(world, x, y, angle) {
+    var car = new PC.Car(x, y, angle, {
+      name: 'Marlowe Cruiser', body: '#f2f0e6', trim: '#2b3a5e',
+      len: 104, wid: 50, top: 700, accel: 760, handling: 1.0, seats: 4,
+    }, world.rng);
+    car.driver = 'police';
+    car.occupied = true;
+    car.siren = true;
+    world.cars.list.push(car);
+    return car;
+  }
+
+  // Place the player in a car exactly, at rest and facing a held heading.
   function parkCar(world, x, y, angle, modelIndex) {
     var model = PC.CAR_MODELS[modelIndex % PC.CAR_MODELS.length];
     var car = new PC.Car(x, y, angle, model, world.rng);
@@ -27,7 +40,7 @@
     world.traffic.clear();
   }
 
-  // A few static cars parked in frame, at exact spots.
+  // A parked car at an exact spot; used to compose a street.
   function propCar(world, x, y, angle, modelIndex) {
     var model = PC.CAR_MODELS[modelIndex % PC.CAR_MODELS.length];
     var car = new PC.Car(x, y, angle, model, world.rng);
@@ -36,53 +49,151 @@
     return car;
   }
 
-  function cops(world, n, cx, cy) {
-    for (var k = 0; k < n; k++) {
-      var ang = (k / n) * 6.283 + 0.4;
-      var x = cx + Math.cos(ang) * 230;
-      var y = cy + Math.sin(ang) * 230;
-      var car = new PC.Car(x, y, Math.atan2(cy - y, cx - x), {
-        name: 'Marlowe Cruiser', body: '#f2f0e6', trim: '#2b3a5e',
-        len: 104, wid: 50, top: 700, accel: 760, handling: 1.0, seats: 4,
-      }, world.rng);
-      car.driver = 'police';
-      car.occupied = true;
-      car.siren = true;
-      world.cars.list.push(car);
-      var unit = new PC.CopUnit(car, null, x, y);
-      world.police.units.push(unit);
-      world.police.cruisers.push(car);
-    }
-    world.police.sirenOn = true;
-  }
-
   function crowd(world, cx, cy, n, radius) {
     for (var k = 0; k < n; k++) {
       var a = (k / n) * 6.283;
-      var r = radius * (0.5 + (k % 3) * 0.25);
-      world.peds.spawnAt(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+      var rr = radius * (0.34 + (k % 4) * 0.19);
+      world.peds.spawnAt(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
     }
   }
 
-  function laneCars(world) {
-    // a couple of traffic cars planted in lane so the street is not empty
-    var defs = [
-      [CFG.CELL * 3 + 55, 700, Math.PI / 2, 3],
-      [CFG.CELL * 3 + 55, 1500, Math.PI / 2, 1],
-      [CFG.CELL * 3 + 55, 2200, -Math.PI / 2, 6],
-      [600, CFG.CELL * 3 + 55, 0, 2],
-      [1700, CFG.CELL * 3 + 55, Math.PI, 4],
-    ];
-    for (var k = 0; k < defs.length; k++) {
-      var d = defs[k];
-      var car = new PC.Car(d[0], d[1], d[2], PC.CAR_MODELS[d[3] % PC.CAR_MODELS.length], world.rng);
-      car.driver = 'traffic';
-      car.occupied = true;
-      car.vx = Math.cos(d[2]) * 200;
-      car.vy = Math.sin(d[2]) * 200;
-      world.cars.list.push(car);
+  var SCENES = {};
+
+  // 1 — COVER. In a car on the beach avenue: ocean and pier on the right, neon shop row on
+  // the left, oncoming traffic, pedestrians on the sand. HUD, minimap and speedometer are
+  // all live, and a job marker sits on the map.
+  SCENES[1] = function (world) {
+    clearTraffic(world);
+    var x = AVENUE - 26;
+    var y = 1980;
+    var car = parkCar(world, x, y, -Math.PI / 2, 0);
+    car.vx = 0;
+    car.vy = -170;
+    car.speed = 170;
+    propCar(world, x + 52, y - 95, Math.PI / 2, 1);
+    propCar(world, x + 52, y + 185, Math.PI / 2, 6);
+    propCar(world, x + 52, y + 400, Math.PI / 2, 2);
+    propCar(world, x - 70, y + 300, 0, 4);
+    crowd(world, CFG.SAND_X + 74, y - 30, 13, 175);
+    crowd(world, x - 250, y + 150, 10, 135);
+    world.police.units.length = 0;
+    world.police.stars = 0;
+    world.shotCam = { x: x, y: y - 120, zoom: 0.92, follow: true, dx: 4, dy: -120 };
+    world.camera.zoom = 0.92;
+    world.camera.x = x;
+    world.camera.y = y - 120;
+    world.hud.banner('PALM CITY', 'The strip at golden hour — seven jobs wait on the map');
+    return true;
+  };
+
+  // 2 — ON FOOT. Mid-pavement in a shop block, pedestrians all round, the job marker ahead.
+  SCENES[2] = function (world) {
+    clearTraffic(world);
+    var bx = CFG.CELL * 2 + CFG.ROAD;
+    var by = CFG.CELL * 3 + CFG.ROAD;
+    world.player.inCar = null;
+    world.player.x = bx + 190;
+    world.player.y = by + CFG.BLOCK - 30;
+    world.player.angle = -Math.PI / 2;
+    world.player.vx = 26;
+    world.player.vy = -70;
+    world.player.stride = 2.1;
+    world.player.health = 82;
+    world.player.armour = 48;
+    crowd(world, bx + 210, by + CFG.BLOCK - 76, 13, 130);
+    for (var k = 0; k < 3; k++) {
+      propCar(world, bx + 40 + k * 118, by + CFG.BLOCK + 62, 0, k + 2);
     }
-  }
+    world.police.stars = 0;
+    world.police.units.length = 0;
+    world.shotCam = { x: bx + 190, y: by + CFG.BLOCK - 170, zoom: 1.06 };
+    world.camera.zoom = 1.06;
+    world.camera.x = bx + 190;
+    world.camera.y = by + CFG.BLOCK - 170;
+    world.hud.banner('ON FOOT', 'Coral Heights — the pavement is busier than it looks');
+    return true;
+  };
+
+  // 3 — POLICE. Three stars; cruisers box the player's car on the avenue and officers are
+  // out on foot with pistols drawn. Stars, siren glow and minimap all show the chase.
+  SCENES[3] = function (world) {
+    clearTraffic(world);
+    var px = AVENUE - 26;
+    var py = 1480;
+    var pcar = parkCar(world, px, py, -Math.PI / 2, 7);
+    pcar.vy = -30;
+    world.player.health = 58;
+    world.player.armour = 30;
+    var spots = [
+      [px, py - 230, Math.PI / 2],
+      [px + 52, py + 250, -Math.PI / 2],
+      [px, py + 430, -Math.PI / 2],
+      [px + 52, py - 410, Math.PI / 2]
+    ];
+    for (var c = 0; c < spots.length; c++) {
+      var sp = spots[c];
+      var car = copCar(world, sp[0], sp[1], sp[2]);
+      world.police.units.push(new PC.CopUnit(car, null, sp[0], sp[1]));
+    }
+    // two officers out of their cars, flanking the player's door
+    var offA = new PC.Officer(px + 44, py - 60);
+    offA.angle = Math.atan2(py - offA.y, px - offA.x);
+    var offB = new PC.Officer(px - 40, py + 66);
+    offB.angle = Math.atan2(py - offB.y, px - offB.x);
+    world.police.units.push(new PC.CopUnit(null, offA, offA.x, offA.y));
+    world.police.units.push(new PC.CopUnit(null, offB, offB.x, offB.y));
+    world.police.stars = 3;
+    world.police.heat = 3;
+    world.player.wanted = 3;
+    world.police.sirenOn = true;
+    crowd(world, px + 260, py + 130, 7, 95);
+    world.shotCam = { x: px, y: py - 30, zoom: 0.92, allowHeat: true };
+    world.camera.zoom = 0.92;
+    world.camera.x = px;
+    world.camera.y = py - 30;
+    world.hud.banner('WANTED', 'Three stars. Every cruiser on the strip is heading your way.');
+    return true;
+  };
+
+  // 4 — MISSION. An active defend job with the crew closing in, a tracer in the air and the
+  // objective on the HUD.
+  SCENES[4] = function (world) {
+    clearTraffic(world);
+    var site = world.city.markers.club;
+    world.missions.index = 5;
+    world.missions.state = 'active';
+    world.missions.briefing = null;
+    world.missions.kills = 2;
+    world.missions.waveLeft = 1;
+    world.player.inCar = null;
+    world.player.x = site.x + 30;
+    world.player.y = site.y + 96;
+    world.player.angle = -1.15;
+    world.player.ammo = 14;
+    world.player.health = 66;
+    world.player.armour = 12;
+    world.player.stride = 1.4;
+    world.aiming = true;
+    world.hostiles.length = 0;
+    for (var h = 0; h < 5; h++) {
+      var ha = 0.35 + h * 0.52;
+      var hx = site.x + Math.cos(ha) * (210 + h * 26);
+      var hy = site.y + Math.sin(ha) * (210 + h * 26);
+      var hostile = world.spawnHostile(hx, hy, 1);
+      hostile.angle = Math.atan2(world.player.y - hy, world.player.x - hx);
+      hostile.fireClock = 0.5 + h * 0.28;
+      hostile.stride = 0.9 + h * 0.3;
+    }
+    crowd(world, site.x - 150, site.y + 130, 9, 95);
+    propCar(world, site.x - 90, site.y + 200, 0, 3);
+    world.combat.tracers.push({ x1: site.x + 30, y1: site.y + 96, x2: site.x + 210, y2: site.y - 10, life: 0.5, max: 0.5 });
+    world.shotCam = { x: site.x + 10, y: site.y + 46, zoom: 0.96 };
+    world.camera.zoom = 0.96;
+    world.camera.x = site.x + 10;
+    world.camera.y = site.y + 46;
+    world.hud.banner('LAST CALL', 'Defend the Sandbar Club (2/6)');
+    return true;
+  };
 
   function setup(world, input, n) {
     world.ui.screen = 'playing';
@@ -90,108 +201,31 @@
     world.player.ammo = 32;
     world.player.health = 78;
     world.player.armour = 62;
-
-    var AX = CFG.CELL * 3 + CFG.ROAD / 2;   // the central avenue
-
-    if (n === 1) {
-      // cover: in a car on the main avenue, neon and traffic around, HUD and minimap live
-      clearTraffic(world);
-      var x = AX + 26, y = 1180;
-      var car = parkCar(world, x, y, -Math.PI / 2, 0);
-      car.vx = -140;
-      car.vy = 0;
-      laneCars(world);
-      propCar(world, AX - 190, y + 210, -Math.PI / 2, 3);
-      crowd(world, AX + 180, y + 60, 9, 90);
-      world.player.wanted = 0;
-      world.camera.zoom = 0.86;
-      world.camera.x = x + 40;
-      world.camera.y = y - 120;
-      world.shotCam = { x: x + 30, y: y - 150, zoom: 0.86 };
-      world.hud.banner('PALM CITY', 'The strip at golden hour — seven jobs wait on the map');
-      return warm;
-    }
-    if (n === 2) {
-      // on foot: player mid-pavement in a shop block, peds, a marker ahead
-      clearTraffic(world);
-      var bx = CFG.CELL * 2 + CFG.ROAD;
-      var by = CFG.CELL * 3 + CFG.ROAD;
-      world.player.inCar = null;
-      world.player.x = bx + 150;
-      world.player.y = by + CFG.BLOCK - 34;
-      world.player.angle = -Math.PI / 2;
-      world.player.vx = 40;
-      world.player.vy = -60;
-      crowd(world, bx + 170, by + CFG.BLOCK - 60, 12, 120);
-      for (var k = 0; k < 3; k++) {
-        propCar(world, bx + 40 + k * 120, by + CFG.BLOCK + 60, 0, k + 2);
-      }
-      world.police.stars = 0;
-      world.shotCam = { x: bx + 150, y: by + CFG.BLOCK - 160, zoom: 1.05 };
-      world.camera.zoom = 1.05;
-      world.hud.banner('ON FOOT', 'Coral Heights — the pavement is busier than it looks');
-      return warm;
-    }
-    if (n === 3) {
-      // police: three stars, cruisers closing, one officer on foot with a drawn pistol
-      clearTraffic(world);
-      var px = AX - 26, py = 1560;
-      var pcar = parkCar(world, px, py, -Math.PI / 2, 7);
-      pcar.vx = -60;
-      world.police.stars = 3;
-      world.police.heat = 3;
-      world.player.wanted = 3;
-      cops(world, 3, px, py - 220);
-      var officer = new PC.Officer(px + 120, py - 150);
-      officer.angle = Math.atan2(py - officer.y, px - officer.x);
-      world.police.units.push(new PC.CopUnit(null, officer, officer.x, officer.y));
-      world.police.units[world.police.units.length - 1].state = 'foot';
-      world.police.sirenOn = true;
-      crowd(world, px + 240, py + 40, 6, 70);
-      world.shotCam = { x: px + 40, y: py - 130, zoom: 0.92 };
-      world.camera.zoom = 0.92;
-      world.hud.banner('WANTED', 'Three stars. Every cruiser on the strip is heading your way.');
-      return warm;
-    }
-    if (n === 4) {
-      // mission: an active defend job with a crew closing in and the objective on the HUD
-      clearTraffic(world);
-      var site = world.city.markers.club;
-      world.missions.index = 5;
-      world.missions.state = 'active';
-      world.missions.briefing = null;
-      world.missions.kills = 2;
-      world.missions.waveLeft = 1;
-      world.player.inCar = null;
-      world.player.x = site.x + 40;
-      world.player.y = site.y + 70;
-      world.player.angle = -1.2;
-      world.player.ammo = 14;
-      world.player.health = 64;
-      world.aiming = true;
-      for (var h = 0; h < 4; h++) {
-        var ha = 0.6 + h * 0.42;
-        var hx = site.x + Math.cos(ha) * (220 + h * 30);
-        var hy = site.y + Math.sin(ha) * (220 + h * 30);
-        var hostile = world.spawnHostile(hx, hy, 1);
-        hostile.angle = Math.atan2(world.player.y - hy, world.player.x - hx);
-        hostile.fireClock = 0.6 + h * 0.3;
-      }
-      crowd(world, site.x - 140, site.y + 120, 8, 90);
-      world.camera.zoom = 0.98;
-      world.shotCam = { x: site.x + 10, y: site.y + 40, zoom: 0.98 };
-      world.combat.tracers.push({ x1: site.x + 40, y1: site.y + 70, x2: site.x + 200, y2: site.y + 10, life: 0.5, max: 0.5 });
-      world.hud.banner('LAST CALL', 'Defend the Sandbar Club (2/6)');
-      return warm;
-    }
-    return null;
+    var scene = SCENES[n];
+    if (!scene) return null;
+    scene(world);
+    return warm;
   }
 
+  // Every step of the shot pass pins the camera to the scene's composition; scene 1 rides
+  // along with the car so the shot shows the car where the arithmetic put it.
   function warm(dt, world) {
-    // hold the staged camera and let particles settle for a beat
-    world.camera.x = world.shotCam.x;
-    world.camera.y = world.shotCam.y;
-    world.camera.zoom = world.shotCam.zoom;
+    var cam = world.shotCam;
+    if (!cam) return;
+    if (!cam.allowHeat) {
+      // the staged streets are not a crime scene unless the scene says so
+      world.police.stars = 0;
+      world.police.heat = 0;
+      world.player.wanted = 0;
+      if (world.police.units.length === 0) world.police.sirenOn = false;
+    }
+    if (cam.follow) {
+      cam.x = world.player.x + (cam.dx || 0);
+      cam.y = world.player.y + (cam.dy || 0);
+    }
+    world.camera.x = cam.x;
+    world.camera.y = cam.y;
+    world.camera.zoom = cam.zoom;
     void dt;
   }
 
