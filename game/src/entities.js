@@ -61,7 +61,7 @@
     p.ammo = 120;
     p.fireCooldown = 0;
     p.breath = 0;
-    p.shirt = '#f4f0e6';
+    p.shirt = '#ffffff';
     p.hair = '#2b2018';
     return p;
   }
@@ -70,24 +70,30 @@
    * Pedestrians: they walk a loop of sidewalk waypoints, pause at corners, and bolt when
    * they hear gunfire or see a body.
    */
+  /**
+   * Pedestrians walk the sidewalk ring around a block: four corners, in order, so they
+   * trace the kerb like people actually do instead of wandering through living rooms.
+   */
   function spawnPedestrians(city, count) {
     const peds = [];
     const rand = PC.rng(city.seed ^ 0x9e3779b9);
-    const rows = PC.GRID - 1;
     for (let i = 0; i < count; i++) {
-      const row = rand.int(0, rows - 1);
-      const col = rand.int(0, PC.GRID - 1);
-      const cx = col * PC.CELL + PC.CELL / 2 + rand.range(-40, 40);
-      const cy = row * PC.CELL + rand.range(30, PC.CELL - 30);
-      const ped = makeActor(cx, cy, {
-        speed: rand.range(34, 62),
-        route: [
-          { x: cx, y: cy },
-          { x: cx + rand.range(-180, 180), y: cy + rand.range(-160, 160) },
-          { x: cx + rand.range(-260, 260), y: cy + rand.range(-200, 200) },
-        ],
+      const lot = rand.pick(city.lots);
+      if (!lot) break;
+      const k = 8;
+      const ring = [
+        { x: lot.x - k, y: lot.y - k },
+        { x: lot.x + lot.w + k, y: lot.y - k },
+        { x: lot.x + lot.w + k, y: lot.y + lot.h + k },
+        { x: lot.x - k, y: lot.y + lot.h + k },
+      ];
+      const corner = rand.int(0, 3);
+      const ped = makeActor(ring[corner].x, ring[corner].y, {
+        speed: rand.range(38, 64),
+        route: ring,
       });
-      ped.facing = rand.range(-Math.PI, Math.PI);
+      ped.routeIndex = corner;
+      ped.walkPhase = rand.range(0, 6.28);
       peds.push(ped);
     }
     return peds;

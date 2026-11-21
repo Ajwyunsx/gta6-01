@@ -41,16 +41,16 @@
     grip: 7.5,           // lateral velocity bleed: higher is tighter
     steer: 2.9,          // rad/s at full lock, scaled by speed
     handbrakeGrip: 2.2,
-    length: 44,
-    width: 22,
-    radius: 17,
+    length: 58,
+    width: 29,
+    radius: 20,
   };
 
   // ---- traffic ------------------------------------------------------------
   PC.TRAFFIC = {
     count: 26,
     speed: 150,
-    laneOffset: 17,      // right-hand drive: keep to the right of the centre line
+    laneOffset: 20,      // right-hand drive: keep to the right of the centre line
     turnChance: 0.34,
     slowRadius: 120,
   };
@@ -82,8 +82,8 @@
   // ---- look ---------------------------------------------------------------
   // Late afternoon on the coast: warm key light, violet shadows, sea haze.
   PC.PALETTE = {
-    asphalt: '#3b4049',
-    asphaltWorn: '#454a54',
+    asphalt: '#5c626c',
+    asphaltWorn: '#666c76',
     lane: '#e9dfc4',
     kerb: '#cfc4ad',
     pavement: '#d9cdb6',
@@ -95,8 +95,8 @@
     foam: '#e8f6f4',
     grass: '#7fae6a',
     grassDark: '#6b9a58',
-    lot: '#8d8b86',
-    shadow: 'rgba(28,26,48,0.30)',
+    lot: '#b9b3a5',
+    shadow: 'rgba(28,26,48,0.26)',
     sky: '#f6d9b0',
     hud: '#f7efe0',
     hudDim: 'rgba(247,239,224,0.55)',

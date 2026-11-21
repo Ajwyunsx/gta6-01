@@ -13,23 +13,31 @@
     { dx: -1, dy: 0, angle: Math.PI },       // west
   ];
 
+  /** The lane centre 120px ahead of the car, offset to the right of the carriageway. */
   function laneTarget(car, dir) {
-    // Aim at the lane centre on the right-hand side of the carriageway.
     return {
-      x: car.x + dir.dx * 120 - dir.dy * T.laneOffset,
+      x: car.x + dir.dx * 120 + -dir.dy * T.laneOffset,
       y: car.y + dir.dy * 120 + dir.dx * T.laneOffset,
     };
   }
 
+  /** Position on a road seam, kept to the right-hand lane for that heading. */
+  function onLane(seam, dir, along) {
+    const rightX = -dir.dy * T.laneOffset;
+    const rightY = dir.dx * T.laneOffset;
+    return dir.dx === 0
+      ? { x: seam + rightX, y: along }
+      : { x: along, y: seam + rightY };
+  }
+
   function makeTrafficCar(rand, city) {
     const horizontal = rand.chance(0.5);
-    const line = rand.int(0, PC.GRID - 1);
+    const line = rand.int(1, PC.GRID - 2);
     const dirIndex = horizontal ? (rand.chance(0.5) ? 1 : 3) : rand.chance(0.5) ? 2 : 0;
     const along = rand.range(PC.CELL * 1.5, PC.WORLD - PC.CELL * 1.5);
     const dir = DIRS[dirIndex];
-    const x = horizontal ? along : line * PC.CELL + PC.CELL / 2 - dir.dy * T.laneOffset;
-    const y = horizontal ? line * PC.CELL + PC.CELL / 2 - dir.dx * T.laneOffset : along;
-    const car = PC.Vehicles.makeCar(x, y, dir.angle, rand.pick(PC.CAR_COLOURS));
+    const pos = onLane(line * PC.CELL, dir, along);
+    const car = PC.Vehicles.makeCar(pos.x, pos.y, dir.angle, rand.pick(PC.CAR_COLOURS));
     car.driver = 'traffic';
     car.occupied = true;
     car.dir = dir;
@@ -97,17 +105,18 @@
     PC.Vehicles.drive(car, throttle, steer, false, dt);
     PC.Vehicles.collideWithCity(car, city);
 
-    // Recycle a car that wanders off the grid or gets stuck on the sand.
-    if (car.x < 40 || car.x > PC.WORLD - 40 || car.y < 40 || car.y > city.beachTop - 40) {
+    // Recycle a car that wanders off the grid or ends up on the sand.
+    if (car.x < 40 || car.x > PC.WORLD - 40 || car.y < 40 || car.y > city.beachTop + PC.CELL * 0.5) {
       respawnTraffic(car, city);
     }
   }
 
   function respawnTraffic(car, city) {
-    const line = Math.floor(Math.random() * (PC.GRID - 1));
+    const line = 1 + Math.floor(Math.random() * (PC.GRID - 2));
     const dir = DIRS[(Math.random() * 4) | 0];
-    car.x = line * PC.CELL + PC.CELL / 2 - dir.dy * T.laneOffset;
-    car.y = Math.min(PC.CELL / 2 - dir.dx * T.laneOffset, (city ? city.beachTop : PC.WORLD) - 80);
+    const pos = onLane(line * PC.CELL, dir, PC.CELL * 1.2);
+    car.x = pos.x;
+    car.y = pos.y;
     car.angle = dir.angle;
     car.dir = dir;
     car.speed = 0;

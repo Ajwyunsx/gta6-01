@@ -214,5 +214,14 @@
     return A;
   }
 
-  PC.Audio = { makeAudio };
+  // One shared instance, so any module can make a noise without holding a reference:
+  // PC.Audio.shot(), PC.Audio.impact(), PC.Audio.engineLevel(...) and so on all forward to
+  // the instance main.js started (and do nothing before it exists).
+  PC.Audio = { makeAudio, current: null };
+  for (const name of ['start', 'engineLevel', 'sirenLevel', 'shot', 'pickup', 'success', 'impact', 'skid', 'setMuted']) {
+    PC.Audio[name] = function forwarded(...args) {
+      const a = PC.Audio.current;
+      return a ? a[name](...args) : undefined;
+    };
+  }
 })(window);

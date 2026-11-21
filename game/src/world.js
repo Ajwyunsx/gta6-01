@@ -35,7 +35,7 @@
       wanted: PC.Police.makeWanted(),
       missions: PC.Missions.makeMissions(city),
       toasts: PC.UI.makeToasts(),
-      camera: { x: player.x, y: player.y, w: 1280, h: 720, zoom: 1 },
+      camera: { x: player.x, y: player.y, w: 1280, h: 720, zoom: 1.15 },
       time: 0,
       mode: 'title',            // title | playing | briefing | paused | busted | wasted
       paused: false,
@@ -135,6 +135,12 @@
 
     if (p.inCar) {
       const car = p.inCar;
+      if (car.staged) {
+        // A staged scene holds the player's car still: the camera is the composition.
+        p.x = car.x;
+        p.y = car.y;
+        return;
+      }
       const throttle = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
       const steer = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
       const handbrake = !!keys.Space;
@@ -208,7 +214,7 @@
     }
 
     p.x = PC.clamp(p.x, 10, PC.WORLD - 10);
-    p.y = PC.clamp(p.y, 10, state.city.beachTop + PC.CELL * 0.45);
+    p.y = PC.clamp(p.y, 10, state.city.waterTop - 24);
   }
 
   /** Pedestrians react to gunfire and the player's crimes. */

@@ -50,9 +50,9 @@
         color: #f7efe0;
         font-size: 15px;
         letter-spacing: 0.16em;
-        transition: opacity 0.3s ease;
+        z-index: 5;
       }
-      #loading.hidden { opacity: 0; pointer-events: none; }
+      #loading.hidden { display: none; }
     </style>
   </head>
   <body>
@@ -63,11 +63,11 @@
     <div id="loading">LOADING PALM CITY</div>
 
     <script>
-      // Hide the loader as soon as the first frame has drawn.
-      window.addEventListener('load', function () {
+      // Held until the first frame is on the canvas, so the still never catches the loader.
+      window.__palmCityReady = function () {
         var el = document.getElementById('loading');
-        if (el) setTimeout(function () { el.classList.add('hidden'); }, 120);
-      });
+        if (el) el.classList.add('hidden');
+      };
     </script>
 
     <script src="src/config.js"></script>

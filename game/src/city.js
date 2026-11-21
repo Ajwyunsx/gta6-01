@@ -22,12 +22,15 @@
     return { x, y, w: size, h: size };
   }
 
-  /** The centre of the road seam between two columns, at a row's mid-height. */
+  /**
+   * Road seams sit on the cell boundaries: every block is bounded by asphalt on all four
+   * sides, which is what makes the grid read as a city rather than a car park.
+   */
   function seamX(col) {
-    return col * CELL + CELL / 2;
+    return col * CELL;
   }
   function seamY(row) {
-    return row * CELL + CELL / 2;
+    return row * CELL;
   }
 
   /**
@@ -152,13 +155,13 @@
     // The promenade: palms and benches along the beach edge, plus umbrellas on the sand.
     const beachTop = BEACH_ROW * CELL;
     for (let col = 0; col < GRID; col++) {
-      const baseX = col * CELL + CELL / 2;
-      palms.push({ x: baseX + rand.range(-40, 40), y: beachTop + rand.range(10, 44), s: rand.range(0.95, 1.3), tilt: rand.range(-0.22, 0.22) });
+      const baseX = col * CELL + CELL * 0.5;
+      palms.push({ x: baseX + rand.range(-40, 40), y: beachTop + rand.range(46, 74), s: rand.range(0.95, 1.3), tilt: rand.range(-0.22, 0.22) });
       if (rand.chance(0.7)) {
-        props.push({ type: 'bench', x: baseX + rand.range(-70, 70), y: beachTop + rand.range(46, 70), a: 0 });
+        props.push({ type: 'bench', x: baseX + rand.range(-70, 70), y: beachTop + rand.range(82, 96), a: 0 });
       }
       if (rand.chance(0.5)) {
-        props.push({ type: 'umbrella', x: baseX + rand.range(-80, 80), y: beachTop + rand.range(90, 150) });
+        props.push({ type: 'umbrella', x: baseX + rand.range(-80, 80), y: beachTop + rand.range(100, 132) });
       }
     }
 
@@ -202,13 +205,16 @@
     // Story anchors: seven fixed spots the mission chain visits.
     const mid = Math.floor(GRID / 2);
     anchors.push({ id: 'garage', x: seamX(mid) - 30, y: seamY(mid + 2), name: 'Rustline Garage' });
-    anchors.push({ id: 'pier', x: CELL * (GRID - 3) + CELL / 2, y: beachTop + 120, name: 'Coral Pier' });
+    anchors.push({ id: 'pier', x: CELL * (GRID - 3) + CELL / 2, y: beachTop + 96, name: 'Coral Pier' });
     anchors.push({ id: 'bank', x: seamX(mid - 2), y: seamY(mid - 2), name: 'Sunstate Bank' });
-    anchors.push({ id: 'docks', x: CELL * 1 + CELL / 2, y: CELL * (GRID - 2) + 40, name: 'North Docks' });
+    anchors.push({ id: 'docks', x: CELL * 1 + CELL / 2, y: CELL * (GRID - 2) + 60, name: 'North Docks' });
     anchors.push({ id: 'club', x: seamX(mid + 3), y: seamY(mid - 1), name: 'Neon Flamingo Club' });
     anchors.push({ id: 'studio', x: CELL * (GRID - 2) + CELL / 2, y: seamY(1), name: 'Waveform Studios' });
     anchors.push({ id: 'villa', x: CELL * (GRID - 3) + CELL / 2, y: CELL * 2 + CELL / 2, name: 'Casa Marbella' });
 
+    // The shore: a coastal road on the last seam, then sand, then the sea.
+    const sandStart = beachTop + ROAD / 2;
+    const sandEnd = beachTop + CELL * 0.62;
     return {
       seed: seed || 20261121,
       buildings,
@@ -219,13 +225,16 @@
       parkedCars,
       anchors,
       beachTop,
-      waterTop: beachTop + CELL * 0.68,
+      sandStart,
+      sandEnd,
+      waterTop: sandEnd,
+      coastRoad: beachTop,
     };
   }
 
-  /** The nearest lane centre for a given axis, used by traffic and cop spawns. */
+  /** A seam coordinate plus a lane offset, used by traffic and cop spawns. */
   function laneCoord(index, axisOffset) {
-    return index * CELL + CELL / 2 + axisOffset;
+    return index * CELL + axisOffset;
   }
 
   /** True when a circle at (x, y) with radius r overlaps any building footprint. */
@@ -251,9 +260,9 @@
     return nearSeamX || nearSeamY;
   }
 
-  /** True when (x, y) is sand or sea, off the road grid. */
+  /** True when (x, y) is sand: below the coastal road, above the waterline. */
   function onBeach(city, y) {
-    return y >= city.beachTop;
+    return y >= city.sandStart && y < city.waterTop;
   }
 
   PC.City = { build, lotRect, subdivideLot, hitsBuilding, onRoad, onBeach, isBeachCell, laneCoord, seamX, seamY };

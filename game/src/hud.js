@@ -35,7 +35,7 @@
 
     // Sand and sea.
     ctx.fillStyle = PC.PALETTE.sand;
-    ctx.fillRect(-px, city.beachTop, PC.WORLD * 2, PC.CELL);
+    ctx.fillRect(-px, city.sandStart, PC.WORLD * 2, city.waterTop - city.sandStart);
     ctx.fillStyle = PC.PALETTE.water;
     ctx.fillRect(-px, city.waterTop, PC.WORLD * 2, PC.WORLD);
 
@@ -44,9 +44,9 @@
     ctx.lineWidth = PC.ROAD;
     ctx.beginPath();
     for (let i = 0; i <= PC.GRID; i++) {
-      const p = i * PC.CELL + PC.CELL / 2;
+      const p = i * PC.CELL;
       ctx.moveTo(p, 0);
-      ctx.lineTo(p, city.beachTop + PC.CELL);
+      ctx.lineTo(p, city.beachTop);
       ctx.moveTo(0, p);
       ctx.lineTo(PC.WORLD, p);
     }
@@ -154,6 +154,8 @@
     // Health and armour.
     const bx = 28;
     const by = H - 92;
+    ctx.fillStyle = 'rgba(10,12,18,0.45)';
+    ctx.fillRect(bx - 12, by - 26, 252, 66);
     bar(ctx, bx, by, 220, 11, player.health, player.maxHealth, '#67c98a');
     bar(ctx, bx, by + 24, 220, 11, player.armour, PC.PLAYER_MAX_ARMOUR, '#6aa7e8');
     ctx.font = '600 11px "Inter", "Segoe UI", system-ui, sans-serif';
@@ -161,6 +163,13 @@
     ctx.textAlign = 'left';
     ctx.fillText('HEALTH', bx, by - 8);
     ctx.fillText('ARMOUR', bx, by + 16);
+
+    // A dark plate behind the top-right block so building signs never fight the numbers.
+    const plate = ctx.createLinearGradient(W - 250, 0, W, 0);
+    plate.addColorStop(0, 'rgba(10,12,18,0)');
+    plate.addColorStop(1, 'rgba(10,12,18,0.62)');
+    ctx.fillStyle = plate;
+    ctx.fillRect(W - 250, 0, 250, 132);
 
     // Cash.
     ctx.textAlign = 'right';
@@ -187,12 +196,14 @@
     if (missions.state === 'active' || missions.state === 'idle') {
       ctx.textAlign = 'center';
       ctx.font = '600 13px "Inter", "Segoe UI", system-ui, sans-serif';
-      ctx.fillStyle = 'rgba(10,12,18,0.55)';
       const text = missions.state === 'active' ? job.objective : 'Find the gold marker to start a job';
-      const w = ctx.measureText(text).width + 34;
-      ctx.fillRect(W / 2 - w / 2, 20, w, 32);
+      const w = ctx.measureText(text).width + 40;
+      ctx.fillStyle = 'rgba(10,12,18,0.62)';
+      ctx.fillRect(W / 2 - w / 2, 18, w, 34);
+      ctx.fillStyle = PC.PALETTE.gold;
+      ctx.fillRect(W / 2 - w / 2, 18, 3, 34);
       ctx.fillStyle = PC.PALETTE.hud;
-      ctx.fillText(text, W / 2, 41);
+      ctx.fillText(text, W / 2, 40);
       if (missions.state === 'active' && job.id === 'last-call') {
         ctx.font = '700 12px "Inter", system-ui, sans-serif';
         ctx.fillStyle = PC.PALETTE.gold;

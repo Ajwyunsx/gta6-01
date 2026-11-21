@@ -22,10 +22,12 @@
 
   const input = PC.Input.makeInput(canvas);
   const audio = PC.Audio.makeAudio();
+  PC.Audio.current = audio;   // the shared forwarders in audio.js point at this instance
 
   let state = PC.World.create(20261121);
   state.camera.w = W;
   state.camera.h = H;
+  state.camera.zoom = 1.15;
 
   let menuSel = 0;
   let fade = 0;
@@ -41,6 +43,7 @@
     state = PC.World.create(seed);
     state.camera.w = W;
     state.camera.h = H;
+    state.camera.zoom = 1.15;
 
     if (fromSave) {
       const p = state.player;
@@ -197,6 +200,7 @@
 
     draw();
     frames += 1;
+    if (frames === 2) global.__palmCityReady?.();
     global.requestAnimationFrame(frame);
   }
 
@@ -264,6 +268,7 @@
       state.time += dt;
       n += 1;
       draw();
+      if (n === 2) global.__palmCityReady?.();
       if (n < target) global.requestAnimationFrame(staged);
       else document.body.dataset.shotReady = '1';
     };
