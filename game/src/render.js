@@ -108,6 +108,7 @@
     this.drawSkids(ctx, world);
     this.drawGroundProps(ctx, world, view);
     this.drawBuildings(ctx, world, view);
+    this.drawPalms(ctx, world, view);
     this.drawMarkers(ctx, world, view);
     this.drawCars(ctx, world, view);
     this.drawPeds(ctx, world, view);
@@ -365,6 +366,121 @@
         ctx.fillStyle = 'rgba(255,255,255,0.28)';
         ctx.fillRect(p.x + 10, p.y + 12, p.w - 20, 3);
         ctx.fillRect(p.x + 18, p.y + 28, p.w - 50, 2);
+      } else if (p.type === 'stall') {
+        ctx.fillStyle = 'rgba(30,26,24,0.16)';
+        U.roundRect(ctx, p.x + 7, p.y + 9, 60, 38, 5);
+        ctx.fill();
+        ctx.fillStyle = '#e7dac0';
+        ctx.fillRect(p.x, p.y, 60, 38);
+        ctx.fillStyle = CFG.colors.neon[1];
+        for (var st = 0; st < 5; st++) ctx.fillRect(p.x + st * 12, p.y, 12, 8);
+        ctx.fillStyle = '#8a6f52';
+        ctx.fillRect(p.x - 3, p.y + 34, 66, 5);
+        ctx.fillStyle = '#c2703f';
+        for (var cr = 0; cr < 3; cr++) ctx.fillRect(p.x + 10 + cr * 16, p.y + 18, 9, 9);
+      } else if (p.type === 'bench') {
+        ctx.fillStyle = 'rgba(40,30,20,0.18)';
+        U.roundRect(ctx, p.x + 4, p.y + 6, 46, 16, 4);
+        ctx.fill();
+        ctx.fillStyle = '#8a6f52';
+        U.roundRect(ctx, p.x, p.y, 46, 14, 3);
+        ctx.fill();
+        ctx.fillStyle = '#c8b48d';
+        ctx.fillRect(p.x + 4, p.y + 10, 38, 4);
+      } else if (p.type === 'lamp') {
+        ctx.fillStyle = 'rgba(30,26,24,0.20)';
+        ctx.beginPath();
+        ctx.ellipse(p.x + 8, p.y + 9, 11, 5, 0, 0, 6.283);
+        ctx.fill();
+        ctx.fillStyle = '#3c3f4a';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 4, 0, 6.283);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255,216,150,0.30)';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 17, 0, 6.283);
+        ctx.fill();
+      } else if (p.type === 'bin') {
+        ctx.fillStyle = 'rgba(30,26,24,0.18)';
+        ctx.beginPath();
+        ctx.ellipse(p.x + 3, p.y + 4, 8, 7, 0, 0, 6.283);
+        ctx.fill();
+        ctx.fillStyle = '#4a5150';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 7, 0, 6.283);
+        ctx.fill();
+        ctx.fillStyle = '#2f3636';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 4.4, 0, 6.283);
+        ctx.fill();
+      } else if (p.type === 'hydrant') {
+        ctx.fillStyle = 'rgba(30,26,24,0.16)';
+        ctx.beginPath();
+        ctx.ellipse(p.x + 3, p.y + 4, 6, 4, 0, 0, 6.283);
+        ctx.fill();
+        ctx.fillStyle = '#c14b3a';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 6, 0, 6.283);
+        ctx.fill();
+        ctx.fillStyle = '#e2684f';
+        ctx.fillRect(p.x - 8, p.y - 2, 16, 4);
+      } else if (p.type === 'umbrella') {
+        var uc = p.color || CFG.colors.neon[0];
+        ctx.fillStyle = 'rgba(40,30,20,0.20)';
+        ctx.beginPath();
+        ctx.ellipse(p.x + 10, p.y + 12, 30, 26, 0, 0, 6.283);
+        ctx.fill();
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot || 0);
+        ctx.fillStyle = uc;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, 27, 0, 6.283);
+        ctx.fill();
+        ctx.fillStyle = '#f4ead4';
+        for (var seg = 0; seg < 6; seg++) {
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.arc(0, 0, 27, (seg / 6) * 6.283, (seg / 6) * 6.283 + 0.24);
+          ctx.fill();
+        }
+        ctx.fillStyle = '#6b4a33';
+        ctx.beginPath();
+        ctx.arc(0, 0, 3.4, 0, 6.283);
+        ctx.fill();
+        ctx.restore();
+      } else if (p.type === 'lounger') {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot || 0);
+        ctx.fillStyle = 'rgba(40,30,20,0.18)';
+        U.roundRect(ctx, 4, 6, 42, 20, 4);
+        ctx.fill();
+        ctx.fillStyle = '#f0e4cb';
+        U.roundRect(ctx, 0, 0, 40, 18, 3);
+        ctx.fill();
+        ctx.fillStyle = '#e2684f';
+        U.roundRect(ctx, 0, 0, 40, 6, 3);
+        ctx.fill();
+        ctx.restore();
+      } else if (p.type === 'boat') {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot || 0);
+        ctx.fillStyle = 'rgba(20,40,50,0.22)';
+        ctx.beginPath();
+        ctx.ellipse(2, 5, 34, 14, 0, 0, 6.283);
+        ctx.fill();
+        ctx.fillStyle = '#f2e8d6';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 32, 13, 0, 0, 6.283);
+        ctx.fill();
+        ctx.fillStyle = '#2f9e96';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 24, 8, 0, 0, 6.283);
+        ctx.fill();
+        ctx.restore();
       } else if (p.type === 'fountain') {
         ctx.fillStyle = '#b9b1a2';
         ctx.beginPath();
@@ -380,6 +496,26 @@
         ctx.fill();
       }
     }
+    // long palm shadows across the ground
+    var palms = world.city.palms;
+    ctx.save();
+    ctx.fillStyle = 'rgba(70,52,36,0.11)';
+    for (var pi = 0; pi < palms.length; pi++) {
+      var pm = palms[pi];
+      if (pm.x > view.x + view.w + 160 || pm.x < view.x - 160) continue;
+      if (pm.y > view.y + view.h + 160 || pm.y < view.y - 160) continue;
+      var pcx = pm.x + 40 * pm.s;
+      var pcy = pm.y + 30 * pm.s;
+      ctx.save();
+      ctx.translate(pcx, pcy);
+      ctx.rotate(pm.rot);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 30 * pm.s, 11 * pm.s, pm.rot * 0.6, 0, 6.283);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+
     // the pier
     var pier = world.city.pier;
     if (pier) {
@@ -567,6 +703,55 @@
   }
 
   // ---- mission markers -------------------------------------------------------
+  // Palms: a leaning trunk and a fan of fronds, drawn tall so they overhang the pavement.
+  Renderer.prototype.drawPalms = function (ctx, world, view) {
+    var list = world.city.palms;
+    var t = world.time;
+    for (var k = 0; k < list.length; k++) {
+      var p = list[k];
+      if (p.x > view.x + view.w + 160 || p.x < view.x - 160) continue;
+      if (p.y > view.y + view.h + 160 || p.y < view.y - 160) continue;
+      var s = p.s || 1;
+      var sway = Math.sin(t * 1.1 + p.rot * 3) * 2.4;
+      var topX = p.x + 26 * s + sway;
+      var topY = p.y - 62 * s;
+      // trunk, seen from above as a short curved stroke toward the canopy
+      ctx.strokeStyle = C.palmTrunk;
+      ctx.lineWidth = 7 * s;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.quadraticCurveTo(p.x + 8 * s, p.y - 34 * s, topX, topY);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,225,180,0.20)';
+      ctx.lineWidth = 2.4 * s;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.quadraticCurveTo(p.x + 8 * s, p.y - 34 * s, topX, topY);
+      ctx.stroke();
+      // fronds
+      ctx.save();
+      ctx.translate(topX, topY);
+      ctx.rotate(p.rot + sway * 0.02);
+      for (var f = 0; f < 7; f++) {
+        var a = (f / 7) * 6.283 + 0.35;
+        var len = (30 + (f % 3) * 6) * s;
+        ctx.fillStyle = f % 2 ? C.palm : C.palmHi;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(Math.cos(a - 0.4) * len * 0.7, Math.sin(a - 0.4) * len * 0.7,
+          Math.cos(a) * len, Math.sin(a) * len);
+        ctx.quadraticCurveTo(Math.cos(a + 0.35) * len * 0.72, Math.sin(a + 0.35) * len * 0.72, 0, 0);
+        ctx.fill();
+      }
+      ctx.fillStyle = 'rgba(20,40,24,0.55)';
+      ctx.beginPath();
+      ctx.arc(0, 0, 4.6 * s, 0, 6.283);
+      ctx.fill();
+      ctx.restore();
+    }
+  };
+
   Renderer.prototype.drawMarkers = function (ctx, world, view) {
     var missions = world.missions;
     var mk = missions.markerPos();
@@ -638,6 +823,33 @@
     ctx.restore();
 
     ctx.rotate(car.angle);
+    // headlight spill: the car someone is driving is the one with its lights on
+    if (car.driver === 'player' && car.speed > 8) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      var lg = ctx.createLinearGradient(L / 2, 0, L / 2 + 210, 0);
+      lg.addColorStop(0, 'rgba(255,226,168,0.34)');
+      lg.addColorStop(1, 'rgba(255,226,168,0)');
+      ctx.fillStyle = lg;
+      ctx.beginPath();
+      ctx.moveTo(L / 2 - 6, -W / 2 + 6);
+      ctx.lineTo(L / 2 + 210, -W / 2 - 44);
+      ctx.lineTo(L / 2 + 210, W / 2 + 44);
+      ctx.lineTo(L / 2 - 6, W / 2 - 6);
+      ctx.closePath();
+      ctx.fill();
+      // speed streaks trailing off the tail — the cheapest way to say "moving fast"
+      ctx.strokeStyle = 'rgba(255,244,214,0.20)';
+      ctx.lineWidth = 2;
+      for (var sk = 0; sk < 3; sk++) {
+        var off = (sk - 1) * (W * 0.30);
+        ctx.beginPath();
+        ctx.moveTo(-L / 2 - 10, off);
+        ctx.lineTo(-L / 2 - 58 - sk * 16, off * 1.6);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
     // body
     var body = car.paint;
     ctx.fillStyle = car.health < car.maxHealth * 0.4 ? U.shade(body, -18) : body;
@@ -678,6 +890,18 @@
       ctx.fillRect(-L * 0.3, -W * 0.3, L * 0.24, W * 0.24);
     }
     ctx.restore();
+
+    // a soft ring under the car you are driving, matching the on-foot ring
+    if (car.driver === 'player') {
+      ctx.save();
+      ctx.translate(car.x, car.y);
+      ctx.rotate(car.angle);
+      ctx.strokeStyle = 'rgba(70,224,193,0.34)';
+      ctx.lineWidth = 2;
+      U.roundRect(ctx, -L / 2 - 7, -W / 2 - 7, L + 14, W + 14, 12);
+      ctx.stroke();
+      ctx.restore();
+    }
 
     // police livery: blue half-doors, a crest on the rear quarter and a light bar that
     // actually flashes red and blue. Drawn in the car's frame so it stays put.
@@ -748,10 +972,18 @@
         this.drawPerson(ctx, h.x, h.y, h.angle, 0, '#3a2f33', 1.05, false, 0, false);
         continue;
       }
-      this.drawPerson(ctx, h.x, h.y, h.angle, h.stride, h.tough > 1.1 ? '#241d28' : '#2b2b33', 1.05, true, h.hitFlash, true);
+      this.drawPerson(ctx, h.x, h.y, h.angle, h.stride, h.tough > 1.1 ? '#4a2230' : '#5b3a3e', 1.12, true, h.hitFlash, true);
+      // a hostile ring in warning red, so a crew member is never mistaken for a pedestrian
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,86,102,0.55)';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(h.x, h.y, 16, 0, 6.283);
+      ctx.stroke();
+      ctx.restore();
       ctx.fillStyle = 'rgba(255,80,90,0.92)';
       ctx.beginPath();
-      ctx.arc(h.x, h.y - 24, 2.7, 0, 6.283);
+      ctx.arc(h.x, h.y - 26, 2.9, 0, 6.283);
       ctx.fill();
       // a health pip over the crew's head when hurt
       if (h.health < h.maxHealth) {
@@ -793,7 +1025,24 @@
       ctx.restore();
       return;
     }
-    this.drawPerson(ctx, p.x, p.y, p.angle, p.stride, C.player, 1.12, true, p.hitFlash, false);
+    // a thin rim light so the player never gets lost among the crowd
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = 'rgba(255,255,255,0.28)';
+    ctx.beginPath();
+    ctx.ellipse(p.x + 3, p.y + 4, 13, 9.5, 0, 0, 6.283);
+    ctx.fill();
+    ctx.restore();
+    // the "you" ring: a soft teal halo under the feet, always readable in a crowd
+    ctx.save();
+    var ring = 0.5 + 0.5 * Math.sin(world.time * 3.4);
+    ctx.strokeStyle = 'rgba(70,224,193,' + (0.26 + ring * 0.16).toFixed(3) + ')';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 15 + ring * 1.6, 0, 6.283);
+    ctx.stroke();
+    ctx.restore();
+    this.drawPerson(ctx, p.x, p.y, p.angle, p.stride, C.player, 1.22, true, p.hitFlash, world.aiming);
     // aim line when aiming on foot, so the mouse aim is legible
     if (world.aiming) {
       var len = 70;
@@ -809,49 +1058,91 @@
     }
   };
 
-  // A person seen from above: shadow, body, head, and swinging arms.
+  // A person from above. Long axis = facing direction (+x in the rotated frame): legs at the
+  // back, a torso that is longer than it is wide, arms tucked along the flanks, and a head at
+  // the front with a crescent of hair behind the face. Silhouette first, details second.
   Renderer.prototype.drawPerson = function (ctx, x, y, angle, stride, color, scale, alive, hitFlash, armed) {
     var s = scale || 1;
     ctx.save();
     ctx.translate(x, y);
-    // shadow
-    ctx.fillStyle = 'rgba(10,8,14,0.32)';
+    // shadow stretched along the body, nudged with the low sun
+    ctx.save();
+    ctx.rotate(angle);
+    ctx.fillStyle = 'rgba(10,8,14,0.30)';
     ctx.beginPath();
-    ctx.ellipse(3, 4, 10 * s, 7.5 * s, 0, 0, 6.283);
+    ctx.ellipse(1, 4, 15 * s, 7 * s, 0, 0, 6.283);
     ctx.fill();
+    ctx.restore();
+
     ctx.rotate(angle);
     if (!alive) {
-      ctx.fillStyle = 'rgba(120,110,120,0.7)';
+      ctx.fillStyle = 'rgba(118,108,118,0.72)';
       ctx.beginPath();
-      ctx.ellipse(0, 0, 12 * s, 6 * s, 0, 0, 6.283);
+      ctx.ellipse(0, 0, 15 * s, 6.5 * s, 0, 0, 6.283);
       ctx.fill();
       ctx.restore();
       return;
     }
-    var swing = Math.sin(stride) * 4 * s;
-    // arms
-    ctx.fillStyle = U.shade(color, -40);
-    ctx.fillRect(-2 * s, -8.5 * s + swing * 0.4, 9 * s, 4 * s);
-    ctx.fillRect(-2 * s, 4.5 * s - swing * 0.4, 9 * s, 4 * s);
-    // body
-    ctx.fillStyle = hitFlash > 0 ? '#ffffff' : color;
-    U.roundRect(ctx, -7 * s, -6 * s, 15 * s, 12 * s, 5 * s);
+    var swing = Math.sin(stride) * 3 * s;
+    var skin = hitFlash > 0 ? '#ffffff' : '#e8c8a6';
+    var coat = hitFlash > 0 ? '#ffffff' : color;
+    var dark = hitFlash > 0 ? '#ffffff' : U.shade(color, -52);
+
+    // legs — two short bars trailing behind the coat
+    ctx.fillStyle = dark;
+    U.roundRect(ctx, -15 * s, -4.6 * s, 9 * s + swing, 3.8 * s, 1.9 * s);
     ctx.fill();
-    // jacket stripe
-    ctx.fillStyle = 'rgba(0,0,0,0.22)';
-    ctx.fillRect(-4 * s, -6 * s, 3 * s, 12 * s);
-    // head
-    ctx.fillStyle = hitFlash > 0 ? '#ffffff' : '#e8c9a8';
+    U.roundRect(ctx, -15 * s, 0.8 * s, 9 * s - swing, 3.8 * s, 1.9 * s);
+    ctx.fill();
+
+    // arms — thin, hugging the flanks, swinging against the legs
+    ctx.fillStyle = U.shade(color, -34);
+    U.roundRect(ctx, -5 * s, -8.4 * s, 12 * s - swing * 0.5, 3 * s, 1.5 * s);
+    ctx.fill();
+    U.roundRect(ctx, -5 * s, 5.4 * s, 12 * s + swing * 0.5, 3 * s, 1.5 * s);
+    ctx.fill();
+    ctx.fillStyle = skin;
     ctx.beginPath();
-    ctx.arc(4 * s, 0, 4.6 * s, 0, 6.283);
+    ctx.arc(7.4 * s - swing * 0.5, -6.9 * s, 1.7 * s, 0, 6.283);
     ctx.fill();
-    ctx.fillStyle = 'rgba(40,30,26,0.55)';
     ctx.beginPath();
-    ctx.arc(2.4 * s, 0, 4.2 * s, Math.PI * 0.55, Math.PI * 1.45);
+    ctx.arc(7.4 * s + swing * 0.5, 6.9 * s, 1.7 * s, 0, 6.283);
     ctx.fill();
+
+    // torso — an oval longer along the facing axis
+    ctx.fillStyle = coat;
+    ctx.beginPath();
+    ctx.ellipse(-1 * s, 0, 11 * s, 6.6 * s, 0, 0, 6.283);
+    ctx.fill();
+    // shoulder shading and a collar seam
+    ctx.fillStyle = 'rgba(0,0,0,0.16)';
+    ctx.beginPath();
+    ctx.ellipse(-5 * s, 0, 6 * s, 6 * s, 0, 0, 6.283);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.14)';
+    ctx.beginPath();
+    ctx.ellipse(2 * s, -2.4 * s, 6 * s, 3 * s, 0.2, 0, 6.283);
+    ctx.fill();
+
+    // head: hair mass, then the face pushed forward out of it
+    ctx.fillStyle = hitFlash > 0 ? '#ffffff' : '#241a18';
+    ctx.beginPath();
+    ctx.arc(8.4 * s, 0, 5 * s, 0, 6.283);
+    ctx.fill();
+    ctx.fillStyle = skin;
+    ctx.beginPath();
+    ctx.arc(10.2 * s, 0, 3.9 * s, 0, 6.283);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.14)';
+    ctx.beginPath();
+    ctx.arc(11.4 * s, 0, 2.6 * s, -1.3, 1.3);
+    ctx.fill();
+
     if (armed) {
-      ctx.fillStyle = '#1e1d22';
-      ctx.fillRect(8 * s, -1.6 * s, 9 * s, 3.2 * s);
+      ctx.fillStyle = '#1b1a20';
+      ctx.fillRect(11 * s, -1.4 * s, 9 * s, 2.8 * s);
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      ctx.fillRect(11 * s, -1.4 * s, 9 * s, 0.9 * s);
     }
     ctx.restore();
   };

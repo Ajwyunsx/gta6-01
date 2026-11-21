@@ -70,18 +70,23 @@
     car.vx = 0;
     car.vy = -170;
     car.speed = 170;
+    car.brakeLight = 0;
     propCar(world, x + 52, y - 95, Math.PI / 2, 1);
     propCar(world, x + 52, y + 185, Math.PI / 2, 6);
     propCar(world, x + 52, y + 400, Math.PI / 2, 2);
     propCar(world, x - 70, y + 300, 0, 4);
     crowd(world, CFG.SAND_X + 74, y - 30, 13, 175);
     crowd(world, x - 250, y + 150, 10, 135);
+    world.city.props.push({ type: 'umbrella', x: CFG.SAND_X + 168, y: y - 132, rot: 0.35, color: CFG.colors.neon[0] });
+    world.city.props.push({ type: 'umbrella', x: CFG.SAND_X + 214, y: y + 96, rot: -0.4, color: CFG.colors.neon[1] });
+    world.city.props.push({ type: 'lounger', x: CFG.SAND_X + 132, y: y - 96, rot: 0.28 });
+    world.city.props.push({ type: 'lounger', x: CFG.SAND_X + 178, y: y + 138, rot: -0.3 });
     world.police.units.length = 0;
     world.police.stars = 0;
-    world.shotCam = { x: x, y: y - 120, zoom: 0.92, follow: true, dx: 4, dy: -120 };
-    world.camera.zoom = 0.92;
-    world.camera.x = x;
-    world.camera.y = y - 120;
+    world.shotCam = { x: x + 66, y: y - 58, zoom: 1.44, follow: true, dx: 66, dy: -58 };
+    world.camera.zoom = 1.44;
+    world.camera.x = x + 66;
+    world.camera.y = y - 58;
     world.hud.banner('PALM CITY', 'The strip at golden hour — seven jobs wait on the map');
     return true;
   };
@@ -89,43 +94,54 @@
   // 2 — ON FOOT. Mid-pavement in a shop block, pedestrians all round, the job marker ahead.
   SCENES[2] = function (world) {
     clearTraffic(world);
-    // On foot, out on the open sand: the cleanest possible read of the character. Cream beach,
-    // palms casting long shadows, a couple of umbrellas, the sea at the edge of frame and the
-    // city glowing away on the left.
-    var wx = CFG.SAND_X + 232;
-    var wy = 2320;
+    // On foot on the sand behind the boardwalk: umbrellas, loungers, palms, a crowd
+    // walking the strip, and the avenue's tail lights just behind him.
+    var wx = CFG.SAND_X + 118;
+    var wy = 1996;
+
+    var grove = [
+      [-46, -212, 1.22], [116, -150, 1.05], [148, 196, 1.30], [-58, 158, 1.10],
+      [276, 30, 1.00], [246, -262, 1.14]
+    ];
+    for (var g = 0; g < grove.length; g++) {
+      world.city.palms.push({ x: wx + grove[g][0], y: wy + grove[g][1], s: grove[g][2], rot: g * 1.1 });
+    }
+    world.city.props.push({ type: 'umbrella', x: wx + 168, y: wy - 116, rot: 0.35, color: CFG.colors.neon[0] });
+    world.city.props.push({ type: 'umbrella', x: wx + 96, y: wy + 176, rot: -0.42, color: CFG.colors.neon[1] });
+    world.city.props.push({ type: 'lounger', x: wx + 132, y: wy - 78, rot: 0.30 });
+    world.city.props.push({ type: 'lounger', x: wx + 62, y: wy + 138, rot: -0.34 });
 
     world.player.inCar = null;
     world.player.x = wx;
     world.player.y = wy;
-    world.player.angle = -1.34;
-    world.player.vx = 18;
-    world.player.vy = -78;
-    world.player.stride = 2.8;
+    world.player.angle = -2.30;
+    world.player.vx = -56;
+    world.player.vy = -14;
+    world.player.stride = 3.0;
     world.player.health = 82;
     world.player.armour = 48;
-    world.aiming = true;
+    world.aiming = false;
 
-    // a scattering of people further down the beach so the scale reads
     var mates = [
-      [wx + 128, wy - 118, -1.1], [wx - 136, wy - 190, 0.4], [wx + 176, wy + 126, 2.4],
-      [wx - 118, wy + 82, -2.0], [wx + 34, wy + 214, 1.2]
+      [wx + 92, wy - 84, 2.6], [wx - 96, wy + 96, 2.1], [wx + 132, wy + 52, 2.5],
+      [wx - 34, wy - 152, 1.9], [wx + 58, wy + 172, 2.4], [wx + 186, wy - 224, 1.7]
     ];
     for (var m = 0; m < mates.length; m++) {
       var ped = world.peds.spawnAt(mates[m][0], mates[m][1]);
       if (ped) ped.angle = mates[m][2];
     }
+    propCar(world, AVENUE - 26, wy - 208, -Math.PI / 2, 0);
+    propCar(world, AVENUE - 26, wy + 148, -Math.PI / 2, 6);
+    propCar(world, AVENUE + 30, wy + 18, Math.PI / 2, 3);
     world.police.stars = 0;
     world.police.units.length = 0;
-    world.shotCam = { x: wx + 6, y: wy - 54, zoom: 2.55 };
-    world.camera.zoom = 2.55;
-    world.camera.x = wx + 6;
-    world.camera.y = wy - 54;
-    world.hud.banner('ON FOOT', 'The sand at dusk — the strip one block west, the sea one east');
+    world.shotCam = { x: wx + 62, y: wy - 44, zoom: 2.86 };
+    world.camera.zoom = 2.86;
+    world.camera.x = wx + 62;
+    world.camera.y = wy - 44;
+    world.hud.banner('ON FOOT', 'The boardwalk — sand on one side, the strip on the other');
     return true;
-  };
-
-  SCENES[3] = function (world) {
+  };  SCENES[3] = function (world) {
     clearTraffic(world);
     // The bust: the player's coupe is stopped in the eastbound lane with a cruiser pulled up
     // nose-to-nose in front and a second one blocking behind. A third is slewing in across
@@ -141,7 +157,7 @@
 
     var ahead = copCar(world, cx + 196, laneS + 4, Math.PI - 0.02);
     var behind = copCar(world, cx - 206, laneS + 4, 0.02);
-    var cutting = copCar(world, cx + 128, laneN - 6, Math.PI - 1.02);
+    var cutting = copCar(world, cx + 148, laneN - 10, Math.PI - 0.86);
     var cops = [ahead, behind, cutting];
     for (var c = 0; c < cops.length; c++) {
       cops[c].speed = 0;
@@ -169,10 +185,10 @@
     world.player.health = 58;
     world.player.armour = 30;
     crowd(world, cx - 60, roadY - 120, 8, 92);
-    world.shotCam = { x: cx + 34, y: laneS + 6, zoom: 1.34, allowHeat: true };
-    world.camera.zoom = 1.34;
-    world.camera.x = cx + 34;
-    world.camera.y = laneS + 6;
+    world.shotCam = { x: cx + 16, y: laneS - 34, zoom: 1.90, allowHeat: true };
+    world.camera.zoom = 1.90;
+    world.camera.x = cx + 16;
+    world.camera.y = laneS - 34;
     world.hud.banner('WANTED', 'Three stars. Every cruiser on the strip is heading your way.');
     return true;
   };
@@ -181,39 +197,52 @@
   // objective on the HUD.
   SCENES[4] = function (world) {
     clearTraffic(world);
-    var site = world.city.markers.club;
+    // The defence outside the Sandbar Club: the player has his back to the sea, the crew is
+    // coming at him down the side street, the club's pink sign is lit behind them. Tracer in
+    // the air, muzzle flash on the tarmac, red pips over the shooters, job banner on top.
+    var club = world.city.markers.club;
+    var px = club.x + 24;
+    var py = club.y + 208;            // on the road south of the club
     world.missions.index = 5;
     world.missions.state = 'active';
     world.missions.briefing = null;
     world.missions.kills = 2;
     world.missions.waveLeft = 1;
     world.player.inCar = null;
-    world.player.x = site.x + 30;
-    world.player.y = site.y + 96;
-    world.player.angle = -1.15;
+    world.player.x = px;
+    world.player.y = py;
+    world.player.angle = -Math.PI / 2 - 0.22;    // facing north, toward the club
     world.player.ammo = 14;
     world.player.health = 66;
     world.player.armour = 12;
-    world.player.stride = 1.4;
+    world.player.stride = 1.6;
     world.aiming = true;
     world.hostiles.length = 0;
-    for (var h = 0; h < 5; h++) {
-      var ha = 0.35 + h * 0.52;
-      var hx = site.x + Math.cos(ha) * (210 + h * 26);
-      var hy = site.y + Math.sin(ha) * (210 + h * 26);
+
+    var arcs = [-0.66, -0.24, 0.1, 0.44, 0.78];
+    for (var h = 0; h < arcs.length; h++) {
+      var ha = -Math.PI / 2 + arcs[h];
+      var dist = 126 + (h % 3) * 40;
+      var hx = px + Math.cos(ha) * dist;
+      var hy = py + Math.sin(ha) * dist;
       var hostile = world.spawnHostile(hx, hy, 1);
-      hostile.angle = Math.atan2(world.player.y - hy, world.player.x - hx);
-      hostile.fireClock = 0.5 + h * 0.28;
-      hostile.stride = 0.9 + h * 0.3;
+      hostile.angle = Math.atan2(py - hy, px - hx);
+      hostile.fireClock = 0.4 + h * 0.24;
+      hostile.stride = 0.9 + h * 0.28;
     }
-    crowd(world, site.x - 150, site.y + 130, 9, 95);
-    propCar(world, site.x - 90, site.y + 200, 0, 3);
-    world.combat.tracers.push({ x1: site.x + 30, y1: site.y + 96, x2: site.x + 210, y2: site.y - 10, life: 0.5, max: 0.5 });
-    world.shotCam = { x: site.x + 10, y: site.y + 46, zoom: 0.96 };
-    world.camera.zoom = 0.96;
-    world.camera.x = site.x + 10;
-    world.camera.y = site.y + 46;
-    world.hud.banner('LAST CALL', 'Defend the Sandbar Club (2/6)');
+    // cover: a car at his shoulder, another slewed in the near lane
+    propCar(world, px + 92, py + 14, Math.PI / 2, 7);
+    propCar(world, px - 156, py - 28, Math.PI / 2 + 0.14, 1);
+    propCar(world, px + 30, py + 226, 0, 5);
+    world.combat.tracers.push({ x1: px, y1: py - 6, x2: px + 30, y2: py - 182, life: 4, max: 4 });
+    world.combat.tracers.push({ x1: px - 206, y1: py - 96, x2: px - 34, y2: py - 14, life: 4, max: 4 });
+    world.effects.particles.push({ x: px + 10, y: py - 16, vx: 24, vy: -46, life: 4, max: 4, size: 6, color: '#ffd98a' });
+    world.effects.particles.push({ x: px + 22, y: py - 24, vx: 40, vy: -70, life: 4, max: 4, size: 4, color: '#ffe9b5' });
+    crowd(world, px - 190, py + 190, 7, 74);
+    world.shotCam = { x: px + 10, y: club.y + 150, zoom: 1.60 };
+    world.camera.zoom = 1.60;
+    world.camera.x = px + 10;
+    world.camera.y = club.y + 150;
     return true;
   };
 
