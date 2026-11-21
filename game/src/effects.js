@@ -1,176 +1,159 @@
-// effects.js — particles, muzzle flashes, tyre smoke, screen shake and the small
-// floating texts (+$120, BUSTED) that give the world its feedback. Pure presentation;
-// nothing here changes game state.
+/* Palm City — particles and camera shake. One pooled particle list draws sparks, blood, tyre
+   smoke, muzzle flashes, explosions and paper money; shake is a decaying offset the renderer
+   applies so hits and crashes land. Nothing here allocates in the frame loop after warm-up. */
+(function (PC) {
+  'use strict';
 
-import { randomRange } from './random.js';
+  var U = PC.util;
+  var POOL = 420;
 
-export class Effects {
-  constructor() {
-    this.particles = [];
-    this.texts = [];
-    this.shake = 0;
-    this.shakeTime = 0;
-    this.flash = 0;
+  function makeEffects() {
+    var parts = new Array(POOL);
+    for (var i = 0; i < POOL; i++) parts[i] = { live: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 1, size: 2, color: '#fff', kind: 'dot', drag: 0.9 };
+    return {
+      parts: parts, next: 0, shakeAmt: 0, shakeT: 0, flash: 0,
+      sx: 0, sy: 0
+    };
   }
 
-  burst(x, y, count, opts = {}) {
-    const {
-      speed = 90,
-      life = 0.5,
-      size = 3,
-      colors = ['#fff2c8'],
-      spread = Math.PI * 2,
-      dir = 0,
-      gravity = 0,
-      drag = 2.4,
-    } = opts;
-    for (let i = 0; i < count; i++) {
-      const a = dir + randomRange(-spread / 2, spread / 2);
-      const s = speed * randomRange(0.35, 1.15);
-      this.particles.push({
-        x,
-        y,
-        vx: Math.cos(a) * s,
-        vy: Math.sin(a) * s,
-        life: life * randomRange(0.6, 1.3),
-        maxLife: life,
-        size: size * randomRange(0.6, 1.4),
-        color: colors[Math.floor(Math.random() * colors.length)],
-        gravity,
-        drag,
-        kind: 'dot',
-      });
+  function spawn(fx, x, y, vx, vy, life, size, color, kind, drag) {
+    var p = fx.parts[fx.next];
+    fx.next = (fx.next + 1) % POOL;
+    p.live = true; p.x = x; p.y = y; p.vx = vx; p.vy = vy;
+    p.life = life; p.max = life; p.size = size; p.color = color; p.kind = kind || 'dot';
+    p.drag = drag === undefined ? 0.88 : drag;
+  }
+
+  function burst(fx, x, y, n, color, speed) {
+    for (var i = 0; i < n; i++) {
+      var a = Math.random() * 6.283, s = speed * (0.4 + Math.random() * 0.8);
+      spawn(fx, x, y, Math.cos(a) * s, Math.sin(a) * s, 0.35 + Math.random() * 0.4, 2 + Math.random() * 3, color, 'dot');
     }
   }
 
-  smoke(x, y, angle, strength = 1) {
-    this.particles.push({
-      x,
-      y,
-      vx: Math.cos(angle) * 20 + randomRange(-24, 24),
-      vy: Math.sin(angle) * 20 + randomRange(-24, 24),
-      life: 0.7 * strength,
-      maxLife: 0.7 * strength,
-      size: 7 * strength,
-      color: '#b9b3c6',
-      gravity: -8,
-      drag: 1.2,
-      kind: 'smoke',
-    });
+  function spark(fx, x, y, color) {
+    for (var i = 0; i < 5; i++) {
+      var a = Math.random() * 6.283, s = 90 + Math.random() * 160;
+      spawn(fx, x, y, Math.cos(a) * s, Math.sin(a) * s, 0.2 + Math.random() * 0.2, 1.6, color || '#ffd88c', 'streak');
+    }
   }
 
-  flashAt(x, y, angle, scale = 1) {
-    this.particles.push({
-      x,
-      y,
-      vx: 0,
-      vy: 0,
-      life: 0.07,
-      maxLife: 0.07,
-      size: 16 * scale,
-      color: '#ffe9a8',
-      gravity: 0,
-      drag: 0,
-      kind: 'flash',
-      angle,
-    });
+  function impact(fx, x, y) {
+    spawn(fx, x, y, 0, 0, 0.18, 7, 'rgba(240,232,210,0.85)', 'ring', 1);
   }
 
-  sparks(x, y, angle, count = 8) {
-    this.burst(x, y, count, {
-      speed: 210,
-      life: 0.28,
-      size: 2.2,
-      colors: ['#ffe08a', '#ffb14a', '#fff6d8'],
-      spread: 1.4,
-      dir: angle,
-      gravity: 60,
-    });
+  function blood(fx, x, y, ang) {
+    for (var i = 0; i < 12; i++) {
+      var a = ang + (Math.random() - 0.5) * 1.5, s = 60 + Math.random() * 190;
+      spawn(fx, x, y, Math.cos(a) * s, Math.sin(a) * s, 0.3 + Math.random() * 0.5, 2 + Math.random() * 3, '#9d2b2b', 'dot');
+    }
+    spawn(fx, x, y, 0, 0, 6, 15, 'rgba(120,25,25,0.4)', 'stain', 1);
   }
 
-  text(x, y, text, color = '#ffe9a8', size = 14) {
-    this.texts.push({ x, y, text, color, size, life: 1.1, maxLife: 1.1 });
+  function muzzle(fx, x, y, ang) {
+    spawn(fx, x, y, Math.cos(ang) * 40, Math.sin(ang) * 40, 0.08, 12, 'rgba(255,232,170,0.95)', 'flash', 1);
+    for (var i = 0; i < 4; i++) {
+      var a = ang + (Math.random() - 0.5) * 0.5, s = 260 + Math.random() * 200;
+      spawn(fx, x, y, Math.cos(a) * s, Math.sin(a) * s, 0.12, 2, '#ffe1a0', 'streak');
+    }
   }
 
-  addShake(amount, time = 0.25) {
-    this.shake = Math.max(this.shake, amount);
-    this.shakeTime = Math.max(this.shakeTime, time);
+  function puff(fx, x, y) {
+    spawn(fx, x, y, (Math.random() - 0.5) * 30, -20 - Math.random() * 30, 1.2, 8 + Math.random() * 8, 'rgba(70,70,75,0.45)', 'smoke', 0.97);
   }
 
-  whiteFlash(a = 0.35) {
-    this.flash = Math.max(this.flash, a);
+  function smoke(fx, x, y, n) {
+    for (var i = 0; i < (n || 1); i++) {
+      spawn(fx, x + (Math.random() - 0.5) * 12, y + (Math.random() - 0.5) * 12, (Math.random() - 0.5) * 40, -30 - Math.random() * 40, 0.8 + Math.random() * 0.9, 6 + Math.random() * 8, 'rgba(60,58,62,0.5)', 'smoke', 0.96);
+    }
   }
 
-  update(dt) {
-    for (let i = this.particles.length - 1; i >= 0; i--) {
-      const p = this.particles[i];
+  function explode(fx, x, y) {
+    spawn(fx, x, y, 0, 0, 0.3, 46, 'rgba(255,200,90,0.95)', 'flash', 1);
+    for (var i = 0; i < 26; i++) {
+      var a = Math.random() * 6.283, s = 90 + Math.random() * 300;
+      spawn(fx, x, y, Math.cos(a) * s, Math.sin(a) * s, 0.5 + Math.random() * 0.7, 3 + Math.random() * 5, i % 2 ? '#ffb347' : '#e2574c', 'dot');
+    }
+    for (var j = 0; j < 10; j++) puff(fx, x + (Math.random() - 0.5) * 30, y + (Math.random() - 0.5) * 30);
+    fx.shakeAmt = Math.max(fx.shakeAmt, 14);
+  }
+
+  function cash(fx, x, y, n) {
+    for (var i = 0; i < (n || 8); i++) {
+      spawn(fx, x, y, (Math.random() - 0.5) * 160, -80 - Math.random() * 120, 0.8 + Math.random() * 0.5, 4, '#8fd8a0', 'note', 0.97);
+    }
+  }
+
+  function shake(fx, amount) { fx.shakeAmt = Math.max(fx.shakeAmt, amount); }
+
+  function update(fx, dt) {
+    for (var i = 0; i < POOL; i++) {
+      var p = fx.parts[i];
+      if (!p.live) continue;
       p.life -= dt;
-      if (p.life <= 0) {
-        this.particles.splice(i, 1);
-        continue;
-      }
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
-      const drag = Math.exp(-p.drag * dt);
-      p.vx *= drag;
-      p.vy *= drag;
-      p.vy += p.gravity * dt;
+      if (p.life <= 0) { p.live = false; continue; }
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      var d = Math.pow(p.drag, dt * 60);
+      p.vx *= d; p.vy *= d;
+      if (p.kind === 'smoke') p.vy -= 8 * dt;
+      if (p.kind === 'note') { p.vy += 60 * dt; p.vx *= 0.99; }
     }
-    for (let i = this.texts.length - 1; i >= 0; i--) {
-      const t = this.texts[i];
-      t.life -= dt;
-      t.y -= 22 * dt;
-      if (t.life <= 0) this.texts.splice(i, 1);
-    }
-    if (this.shakeTime > 0) {
-      this.shakeTime -= dt;
-      if (this.shakeTime <= 0) this.shake = 0;
-    }
-    this.flash = Math.max(0, this.flash - dt * 2.2);
+    if (fx.shakeAmt > 0) {
+      fx.shakeAmt = Math.max(0, fx.shakeAmt - dt * 26);
+      var a = fx.shakeAmt;
+      fx.sx = (Math.random() - 0.5) * a;
+      fx.sy = (Math.random() - 0.5) * a;
+    } else { fx.sx = 0; fx.sy = 0; }
   }
 
-  draw(ctx, camera) {
+  function draw(fx, ctx, cam) {
     ctx.save();
-    for (const p of this.particles) {
-      const a = Math.max(0, p.life / p.maxLife);
-      if (p.kind === 'flash') {
-        ctx.globalAlpha = a;
+    ctx.translate(-cam.x, -cam.y);
+    for (var i = 0; i < POOL; i++) {
+      var p = fx.parts[i];
+      if (!p.live) continue;
+      var k = p.life / p.max;
+      if (p.kind === 'ring') {
+        ctx.strokeStyle = p.color;
+        ctx.globalAlpha = k;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (1.6 - k), 0, 6.283); ctx.stroke();
+      } else if (p.kind === 'flash') {
+        ctx.globalAlpha = k * 0.9;
         ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size * 1.8, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalCompositeOperation = 'source-over';
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size * k, 0, 6.283); ctx.fill();
+      } else if (p.kind === 'streak') {
+        ctx.globalAlpha = k;
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x - p.vx * 0.02, p.y - p.vy * 0.02);
+        ctx.stroke();
+      } else if (p.kind === 'stain') {
+        ctx.globalAlpha = Math.min(0.45, k * 0.5);
+        ctx.fillStyle = p.color;
+        ctx.beginPath(); ctx.ellipse(p.x, p.y, p.size, p.size * 0.65, 0.6, 0, 6.283); ctx.fill();
       } else if (p.kind === 'smoke') {
-        ctx.globalAlpha = a * 0.4;
+        ctx.globalAlpha = k * 0.55;
         ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size * (1.6 - a * 0.6), 0, Math.PI * 2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (1.8 - k), 0, 6.283); ctx.fill();
+      } else if (p.kind === 'note') {
+        ctx.globalAlpha = Math.min(1, k * 2);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x - 3, p.y - 2, 6, 4);
       } else {
-        ctx.globalAlpha = a;
+        ctx.globalAlpha = k;
         ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size * (0.5 + a * 0.5), 0, Math.PI * 2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (0.4 + k * 0.6), 0, 6.283); ctx.fill();
       }
     }
-    ctx.restore();
-
-    ctx.save();
-    for (const t of this.texts) {
-      const a = Math.min(1, t.life / t.maxLife * 1.6);
-      ctx.globalAlpha = a;
-      ctx.font = `800 ${t.size}px ui-sans-serif, system-ui, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.fillStyle = 'rgba(0,0,0,0.55)';
-      ctx.fillText(t.text, t.x + 1, t.y + 1);
-      ctx.fillStyle = t.color;
-      ctx.fillText(t.text, t.x, t.y);
-    }
+    ctx.globalAlpha = 1;
     ctx.restore();
   }
-}
+
+  PC.effects = {
+    make: makeEffects, update: update, draw: draw,
+    burst: burst, spark: spark, impact: impact, blood: blood, muzzle: muzzle,
+    puff: puff, smoke: smoke, explode: explode, cash: cash, shake: shake
+  };
+})(window.PC = window.PC || {});

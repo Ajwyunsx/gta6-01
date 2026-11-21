@@ -1,100 +1,81 @@
-// input.js — keyboard and mouse, collected into one small state object main.js reads.
-// Keys are tracked by physical code so WASD works on any layout; the mouse position is
-// kept in screen space and converted to world space by the caller.
+/* Palm City — the keyboard and mouse. One object holds the key states the game asks about and
+   the pointer mapped into world coordinates each frame; pressed-this-frame edges are kept so an
+   action (enter car, fire, pause) fires once per press, not once per frame. */
+(function (PC) {
+  'use strict';
 
-const KEY_ACTIONS = {
-  KeyW: 'up',
-  ArrowUp: 'up',
-  KeyS: 'down',
-  ArrowDown: 'down',
-  KeyA: 'left',
-  ArrowLeft: 'left',
-  KeyD: 'right',
-  ArrowRight: 'right',
-  ShiftLeft: 'sprint',
-  ShiftRight: 'sprint',
-  Space: 'handbrake',
-  KeyE: 'use',
-  KeyM: 'mute',
-  Escape: 'pause',
-  Enter: 'confirm',
-  KeyR: 'restart',
-  KeyH: 'horn',
-  Tab: 'map',
-};
-
-export function createInput(canvas) {
-  const state = {
-    up: false,
-    down: false,
-    left: false,
-    right: false,
-    sprint: false,
-    handbrake: false,
-    use: false,
-    mute: false,
-    pause: false,
-    confirm: false,
-    restart: false,
-    horn: false,
-    map: false,
-    mouseX: 640,
-    mouseY: 360,
-    mouseDown: false,
-    clicked: false,
-    mouseWorldX: 0,
-    mouseWorldY: 0,
-    wheel: 0,
-    pressed: new Set(),
+  var BIND = {
+    KeyW: 'up', ArrowUp: 'up',
+    KeyS: 'down', ArrowDown: 'down',
+    KeyA: 'left', ArrowLeft: 'left',
+    KeyD: 'right', ArrowRight: 'right',
+    ShiftLeft: 'sprint', ShiftRight: 'sprint',
+    Space: 'brake',
+    KeyE: 'enter',
+    KeyF: 'fire',
+    KeyR: 'reload',
+    KeyM: 'map',
+    Escape: 'pause',
+    KeyH: 'horn',
+    Enter: 'confirm',
+    KeyQ: 'mission'
   };
 
-  const onKey = (event, down) => {
-    const action = KEY_ACTIONS[event.code];
-    if (!action) return;
-    // Let the browser keep its own shortcuts, but stop arrows/space from scrolling the page.
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab'].includes(event.code)) event.preventDefault();
-    if (down && !state[action]) state.pressed.add(action);
-    state[action] = down;
-  };
+  function createInput(canvas) {
+    var state = {
+      keys: { up: false, down: false, left: false, right: false, sprint: false, brake: false },
+      edge: {},
+      mouse: { x: 640, y: 360, wx: 0, wy: 0, active: false, down: false, clicked: false },
+      anyKey: false
+    };
 
-  window.addEventListener('keydown', (event) => {
-    if (event.repeat) return;
-    onKey(event, true);
-  });
-  window.addEventListener('keyup', (event) => onKey(event, false));
-
-  const setMouse = (event) => {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    state.mouseX = (event.clientX - rect.left) * scaleX;
-    state.mouseY = (event.clientY - rect.top) * scaleY;
-  };
-  canvas.addEventListener('mousemove', setMouse);
-  canvas.addEventListener('mousedown', (event) => {
-    setMouse(event);
-    if (event.button === 0) {
-      state.mouseDown = true;
-      state.pressed.add('shoot');
+    function set(name, val, e) {
+      if (name === 'up' || name === 'down' || name === 'left' || name === 'right' || name === 'sprint' || name === 'brake') {
+        state.keys[name] = val;
+      }
+      if (val && !state.edge[name]) state.edge[name] = true;
+      if (e && (name === 'brake' || name === 'enter' || name === 'fire')) e.preventDefault();
+      state.anyKey = true;
     }
-  });
-  window.addEventListener('mouseup', (event) => {
-    if (event.button === 0) state.mouseDown = false;
-  });
-  canvas.addEventListener('contextmenu', (event) => event.preventDefault());
-  canvas.addEventListener('wheel', (event) => {
-    event.preventDefault();
-    state.wheel += Math.sign(event.deltaY);
-  }, { passive: false });
 
-  window.addEventListener('blur', () => {
-    for (const key of Object.keys(state)) if (typeof state[key] === 'boolean') state[key] = false;
-  });
+    window.addEventListener('keydown', function (e) {
+      var name = BIND[e.code];
+      if (!name) return;
+      if (name === 'pause' || name === 'brake' || name === 'enter') e.preventDefault();
+      set(name, true, e);
+    });
+    window.addEventListener('keyup', function (e) {
+      var name = BIND[e.code];
+      if (!name) return;
+      set(name, false);
+    });
+    window.addEventListener('blur', function () {
+      state.keys.up = state.keys.down = state.keys.left = state.keys.right = false;
+      state.keys.sprint = state.keys.brake = false;
+    });
 
-  state.wasPressed = (action) => state.pressed.has(action);
-  state.endFrame = () => {
-    state.pressed.clear();
-    state.wheel = 0;
-  };
-  return state;
-}
+    canvas.addEventListener('mousemove', function (e) {
+      var r = canvas.getBoundingClientRect();
+      state.mouse.x = (e.clientX - r.left) / r.width * canvas.width;
+      state.mouse.y = (e.clientY - r.top) / r.height * canvas.height;
+      state.mouse.active = true;
+    });
+    canvas.addEventListener('mousedown', function (e) {
+      if (e.button === 0) { state.mouse.down = true; state.mouse.clicked = true; }
+      e.preventDefault();
+    });
+    window.addEventListener('mouseup', function (e) {
+      if (e.button === 0) state.mouse.down = false;
+    });
+    canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+    state.pressed = function (name) {
+      if (state.edge[name]) { state.edge[name] = false; return true; }
+      return false;
+    };
+    state.clearEdges = function () { state.edge = {}; state.mouse.clicked = false; };
+    return state;
+  }
+
+  PC.input = { create: createInput, BIND: BIND };
+})(window.PC = window.PC || {});
