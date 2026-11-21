@@ -14,7 +14,7 @@
       seed: seed, rng: rng, city: city, input: input, audio: audio,
       player: null, traffic: [], parked: [], peds: [], pickups: [], heat: null, missions: null,
       effects: PC.effects.make(), hud: PC.hud.make(),
-      time: 0, money: C.START_MONEY, noise: 0,
+      time: 0, money: C.START_MONEY, noise: 0, damageFlash: 0,
       stats: { jobs: 0, killed: 0, knocked: 0, damageTaken: 0, distance: 0, jacked: 0 },
       over: false, overKind: '', overTimer: 0, storyDone: false,
       marineCoupe: null, camera: { x: 0, y: 0, zoom: 1, targetZoom: 1 },
@@ -78,6 +78,7 @@
     }
     world.time += dt;
     if (world.noise > 0) world.noise = Math.max(0, world.noise - dt * 1.4);
+    if (world.damageFlash > 0) world.damageFlash = Math.max(0, world.damageFlash - dt * 1.9);
 
     var pl = world.player;
     var prevX = pl.x, prevY = pl.y;
@@ -216,6 +217,8 @@
   function updateCamera(world, dt) {
     var pl = world.player;
     var cam = world.camera;
+    // a staged screenshot pins the camera; live play never sets this
+    if (cam.lock) return;
     var tx = pl.x, ty = pl.y;
     if (pl.inCar) {
       // lead the camera a little in the direction of travel
@@ -233,7 +236,7 @@
     cam.x = U.lerp(cam.x, wantX, k);
     cam.y = U.lerp(cam.y, wantY, k);
     cam.x = U.clamp(cam.x, 0, Math.max(0, C.CITY_W - vw));
-    cam.y = U.clamp(cam.y, 0, Math.max(0, C.CITY_H + C.BEACH_H - vh));
+    cam.y = U.clamp(cam.y, 0, Math.max(0, C.WORLD_H - vh));
   }
 
   function triggerOver(world, kind) {

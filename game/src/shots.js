@@ -8,7 +8,7 @@
   var C = PC.CONFIG, U = PC.util;
 
   function stage(name, env) {
-    console.log('[shots] stage', name);
+    
     var index = Number.parseInt(name, 10) || 1;
     var input = PC.input.create(env.canvas);
     var audio = PC.audio.make();
@@ -24,12 +24,14 @@
 
     // simulate a little so traffic, peds and particles are in motion, then paint
     for (var i = 0; i < 40; i++) PC.world.step(world, C.STEP);
+    // some scenes want the last word on the composition: hold the cast, then settle
+    if (world.__post) world.__post(world);
     settleCamera(world);
 
     var painted = 0;
     function paint() {
       try {
-        console.log('[shots] paint', painted, 'cam', world.camera.x|0, world.camera.y|0, 'pl', world.player.x|0, world.player.y|0, 'car', world.player.inCar ? (world.player.inCar.x|0) : 'foot', 'parked', world.parked.length, 'traffic', world.traffic.length, 'carsDrawn', window.__shotDebug.carsDrawn);
+        
         PC.render.draw(env.renderer, world, 2.2);
         if (index === 4) PC.ui.drawMissionCard(env.renderer.ctx, world, 2.2);
         else PC.ui.drawToast(env.renderer.ctx, world, 2.2);
@@ -49,6 +51,7 @@
 
   function settleCamera(world) {
     var cam = world.camera;
+    cam.lock = true;   // hold the framing the scene asked for
     var bias = cam.bias || { x: 0, y: 0 };
     var pl = world.player;
     var tx = pl.x, ty = pl.y;
@@ -59,10 +62,10 @@
       tx += Math.cos(pl.angle) * 40;
       ty += Math.sin(pl.angle) * 40;
     }
-    var z = cam.targetZoom, vw = C.VW / z, vh = C.VH / z;
+    var z = cam.shotZoom || cam.targetZoom, vw = C.VW / z, vh = C.VH / z;
     cam.zoom = z;
     cam.x = U.clamp(tx - vw / 2 + bias.x, 0, Math.max(0, C.CITY_W - vw));
-    cam.y = U.clamp(ty - vh / 2 + bias.y, 0, Math.max(0, C.CITY_H + C.BEACH_H - vh));
+    cam.y = U.clamp(ty - vh / 2 + bias.y, 0, Math.max(0, C.WORLD_H - vh));
   }
 
   /* 1 — the cover: at the wheel on the coast road at golden hour, the sea on one side and the
@@ -70,7 +73,7 @@
   function sceneCover(world) {
     var pl = world.player;
     world.traffic.length = 0;
-    world.camera.bias = { x: 0, y: 120 };
+    world.camera.bias = { x: 132, y: 84 };
     // the coast road runs east-west along the top edge of the beach
     var coastY = C.GRID * C.CELL - C.ROAD / 2 - 2;
     var car = PC.vehicles.makeCar(C.CELL * 6.2, coastY + C.LANE, 0, { rng: world.rng, type: 'coupe', paint: '#d94f4f' });
@@ -81,6 +84,7 @@
     pl.x = car.x; pl.y = car.y;
     world.camera.targetZoom = 1.0;
     world.camera.zoom = 1.0;
+    world.camera.shotZoom = 1.0;
     world.money = 1840;
     pl.health = 92; pl.armor = 64;
     world.missions.index = 3;
@@ -155,58 +159,92 @@
     world.input.mouse.x = 880; world.input.mouse.y = 300;
     world.input.mouse.wx = pl.x + 140;
     world.input.mouse.wy = pl.y - 30;
-    world.camera.targetZoom = 1.2;
-    world.camera.zoom = 1.2;
+    world.camera.targetZoom = 1.0;
+    world.camera.zoom = 1.0;
+    world.camera.shotZoom = 1.0;
     world.hud.flash('Collect from the pawnbroker', '#ff6f7d');
     world.hud.flashTimer = 0;
   }
 
-  /* 3 — wanted: three stars, cruisers closing, sirens, smoke from a wreck. */
+  /* 3 — wanted: three stars on the coast road. The player's car runs east along the beach
+     front with two cruisers filling the mirror and a third cutting across the centre line
+     head-on; a civilian car burns on the kerb, smoke laying over the tarmac. */
   function scenePolice(world) {
     var pl = world.player;
-    var avenue = C.CELL * 9;
-    var car = PC.vehicles.makeCar(avenue + C.LANE * 0.6, C.CELL * 8.6, -Math.PI / 2, { rng: world.rng, type: 'sedan', paint: '#3f8f8a' });
+    var roadY = C.GRID * C.CELL - C.ROAD / 2;
+    var laneY = roadY + C.LANE * 1.55;
+    var onY = roadY - C.LANE * 1.55;
+    var cx = C.CELL * 6.4;
+    world.traffic.length = 0;
+    world.camera.bias = { x: -26, y: -22 };
+    world.camera.targetZoom = 1.46;
+    world.camera.zoom = 1.46;
+    world.camera.shotZoom = 1.46;
+
+    var car = PC.vehicles.makeCar(cx, laneY, 0, { rng: world.rng, type: 'sedan', paint: '#3f8f8a' });
     car.driver = 'player';
-    car.speed = 260;
-    car.health = 62;
+    car.health = 54;
     world.parked.push(car);
     pl.inCar = car;
     pl.x = car.x; pl.y = car.y;
-    pl.health = 68; pl.armor = 40;
+    pl.health = 62; pl.armor = 34;
     world.money = 2960;
     world.heat.stars = 3;
     world.heat.decay = 6;
-    world.camera.targetZoom = 1.16;
-    world.camera.zoom = 1.16;
+    world.heat.cops.length = 0;
 
-    // three cruisers behind and beside, nose-in on the chase
-    var c1 = PC.vehicles.makeCar(car.x - 6, car.y + 84, -Math.PI / 2 + 0.05, { rng: world.rng, police: true, paint: '#f2f0e8', type: 'sedan' });
-    c1.speed = 250; c1.occupied = true;
-    var c2 = PC.vehicles.makeCar(car.x - 92, car.y + 152, -Math.PI / 2 - 0.14, { rng: world.rng, police: true, paint: '#f2f0e8', type: 'sedan' });
-    c2.speed = 235; c2.occupied = true;
-    var c3 = PC.vehicles.makeCar(car.x + 84, car.y + 196, -Math.PI / 2 + 0.18, { rng: world.rng, police: true, paint: '#f2f0e8', type: 'coupe' });
-    c3.speed = 244; c3.occupied = true;
-    world.heat.cops.push(c1, c2, c3);
+    var box = [
+      PC.vehicles.makeCar(cx - 74, laneY - 3, 0.02, { rng: world.rng, police: true, paint: '#f2f0e8', type: 'sedan' }),
+      PC.vehicles.makeCar(cx - 156, laneY + 10, 0.06, { rng: world.rng, police: true, paint: '#f2f0e8', type: 'sedan' }),
+      PC.vehicles.makeCar(cx + 238, onY, Math.PI - 0.03, { rng: world.rng, police: true, paint: '#f2f0e8', type: 'coupe' })
+    ];
+    box.forEach(function (c) { c.speed = 0; c.cruise = 0; c.occupied = true; c.frozen = true; world.heat.cops.push(c); });
 
-    // a burning civilian car ahead, smoke rising
-    var wreck = PC.vehicles.makeCar(car.x + 96, car.y - 96, 0.5, { rng: world.rng, type: 'van', paint: '#a2583d' });
+    var wreck = PC.vehicles.makeCar(cx - 186, roadY + C.ROAD * 0.46, 0.55, { rng: world.rng, type: 'van', paint: '#a2583d' });
     wreck.health = 0;
     world.parked.push(wreck);
-    for (var s = 0; s < 6; s++) world.effects.smoke(wreck.x, wreck.y, 3);
-    world.effects.explode(wreck.x, wreck.y);
-    world.hud.flash('Wanted: 3 stars', '#e0402f');
-    world.hud.flashTimer = 0;
+
+    // civilian traffic further along, so this reads as a street, not a set
+    [[cx + 262, laneY + 16, 0.02, 'compact', '#e0b23c'],
+     [cx + 430, laneY + 4, 0.03, 'van', '#6f7f95'],
+     [cx + 92, onY - 10, Math.PI, 'pickup', '#b8552f']].forEach(function (d) {
+      var c = PC.vehicles.makeCar(d[0], d[1], d[2], { rng: world.rng, type: d[3], paint: d[4] });
+      c.traffic = true; c.straight = true; c.speed = 96; c.cruise = 96;
+      world.traffic.push(c);
+    });
 
     world.missions.index = 4;
     world.missions.state = 'active';
     world.missions.job = PC.missions.JOBS[4];
     world.missions.step = 0;
     world.missions.targets = [
-      { at: 'pickup', x: PC.missions.SPOTS.cafe.x + 30, y: PC.missions.SPOTS.cafe.y - 30, label: 'Clear', kind: 'escape' },
       { at: 'drop', x: PC.missions.SPOTS.pier.x, y: PC.missions.SPOTS.pier.y, label: 'Pier head', kind: 'drop' }
     ];
     world.audio.siren(true);
-    seedTrafficAround(world, avenue - C.LANE * 3.2, C.CELL * 9.2, 3);
+
+    world.__post = function (w) {
+      car.x = cx; car.y = laneY; car.angle = 0; car.speed = 272;
+      box[0].x = cx - 74; box[0].y = laneY - 3; box[0].angle = 0.02; box[0].speed = 268;
+      box[1].x = cx - 156; box[1].y = laneY + 10; box[1].angle = 0.06; box[1].speed = 260;
+      box[2].x = cx + 238; box[2].y = onY; box[2].angle = Math.PI - 0.03; box[2].speed = 286;
+      wreck.x = cx - 186; wreck.y = roadY + C.ROAD * 0.46;
+      for (var q = 0; q < w.effects.parts.length; q++) w.effects.parts[q].live = false;
+      for (var s = 0; s < 15; s++) {
+        var jz = (s * 37) % 11 - 5;
+        w.effects.smoke(wreck.x + jz + s * 2.4, wreck.y - s * 9 - 4, 4);
+      }
+      w.effects.burst(wreck.x, wreck.y, 9, '#ff9a3c', 50);
+      // guns out the windows of the two cars on the player's tail
+      w.effects.burst(box[0].x + 30, box[0].y - 12, 7, '#ffd27a', 120);
+      w.effects.burst(box[0].x + 40, box[0].y - 18, 4, '#fff3cf', 60);
+      w.effects.burst(box[2].x - 32, box[2].y + 12, 7, '#ffd27a', 120);
+      w.effects.burst(box[2].x - 42, box[2].y + 18, 4, '#fff3cf', 60);
+      for (var t = 0; t < 9; t++) w.effects.puff(car.x - 26 - t * 6, car.y + 16 + (t % 2) * 7, 1.8);
+      w.effects.shake(3);
+      w.damageFlash = 0;
+      w.hud.flash('Wanted: 3 stars', '#e0402f');
+      w.hud.flashTimer = 0;
+    };
   }
 
   /* 4 — the briefing: job card over the city, the marker and a car waiting. */
@@ -235,8 +273,9 @@
       var ped = PC.entities.spawnPed(world.city, world.rng, s.x - 40 + i * 40, s.y + 2 + (i % 2) * 26);
       world.peds.push(ped);
     }
-    world.camera.targetZoom = 1.1;
-    world.camera.zoom = 1.1;
+    world.camera.targetZoom = 1.0;
+    world.camera.zoom = 1.0;
+    world.camera.shotZoom = 1.0;
     world.hud.flash('The Check Cashing Job', '#f2c14e');
     world.hud.flashTimer = 0;
   }

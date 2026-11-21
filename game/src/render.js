@@ -62,6 +62,13 @@
 
     drawLight(ctx, world, view);
     drawVignette(ctx);
+    if (world.damageFlash > 0) {
+      var dg = ctx.createRadialGradient(C.VW / 2, C.VH / 2, C.VH * 0.25, C.VW / 2, C.VH / 2, C.VH * 0.82);
+      dg.addColorStop(0, 'rgba(190,40,30,0)');
+      dg.addColorStop(1, 'rgba(190,40,30,' + (0.5 * Math.min(1, world.damageFlash)) + ')');
+      ctx.fillStyle = dg;
+      ctx.fillRect(0, 0, C.VW, C.VH);
+    }
     world.hud.draw(ctx, world, t);
     if (world.over) drawOver(ctx, world);
   }
