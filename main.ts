@@ -1,71 +1,90 @@
-// Palm City — a make.fun entry (Node 22, standard library only).
+// Palm City — hand-in program for the make.fun "Make GTA 6" bounty (gta6-01).
 //
-// What ships: game/ is a self-contained static open-world crime sandbox a desktop browser loads
-// offline — game/index.html plus its ES modules, no library and no network request: a streaming
-// city grid, on-foot and driving modes, traffic and pedestrians, a police heat system, missions,
-// HUD and effects, all rendered with the 2D canvas API in flat colours and no audio assets.
+// Palm City is an original top-down open-world crime game: a seeded sun-soaked coastal
+// grid city with a beach and palms, pedestrians and lane traffic, cars you can steal and
+// drive, a five-star wanted level and police cruisers that chase you, gunfights, pickups,
+// a seven-job story chain, and a live circular minimap on the HUD. The game itself is
+// plain static files under game/ (classic scripts, no build step, no network request);
+// this program only hands the entry in.
 //
-// What this file does: it is the hand-in plumbing, not the game. It copies game/ and screenshots/
-// from beside this file into the output directory (/output under the grader, MAKEFUN_OUTPUT_DIR
-// elsewhere) and writes dossier.json — the summary the judge reads — using the vendored make.fun
-// library. Screenshots are optional: a missing screenshots/ source directory is skipped quietly
-// instead of crashing the hand-in, since the judge treats the first screenshot by name as a cover.
+// It copies game/ and screenshots/ from beside this file into the output directory
+// (/output inside the grader, MAKEFUN_OUTPUT_DIR outside it), then writes the dossier the
+// judge reads with buildDossier from the kit's vendored library.
 //
-// Serve it locally with `node serve.ts`, then open http://localhost:8080.
-// Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
-import { cpSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
-const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
-/** Copy a directory tree, tolerating a source that does not exist. Returns files copied (0 if skipped). */
-function copyTree(source: string, dest: string, label: string): number {
-  if (!existsSync(source)) {
-    console.warn(`[main] ${label}: no ${source} beside the entry, skipping`);
-    return 0;
-  }
-  cpSync(source, dest, { recursive: true });
-  return countFiles(dest);
-}
-
-/** Depth-first file count, so the summary reports what actually landed in the output. */
-function countFiles(dir: string): number {
-  let total = 0;
-  for (const name of readdirSync(dir)) {
-    const path = join(dir, name);
-    if (statSync(path).isDirectory()) total += countFiles(path);
-    else total += 1;
-  }
-  return total;
-}
-
-mkdirSync(out, { recursive: true });
-
-const gameFiles = copyTree(join(here, 'game'), join(out, 'game'), 'game');
-mkdirSync(join(out, 'screenshots'), { recursive: true });
-const shotFiles = copyTree(join(here, 'screenshots'), join(out, 'screenshots'), 'screenshots');
-
-// The scorer's own caps (reference/gate.json): only text_max_bytes shapes the bytes; the others refuse an entry the
-// scorer would refuse (more than 4 screenshots or one over 256 KiB; more than 993 files in game/ or 48 MiB of game
-// files, in all, or a path under game/ over 1000 bytes: game/ counts beside /output's own 1000-entry cap, its
-// screenshots/ and dossier.json).
-const dossier = buildDossier(out, {
+// The scorer's caps, passed straight through so the dossier refuses what the gate refuses.
+const CAPS = {
   text_max_bytes: 163840,
   screenshots: { max: 4, max_bytes: 262144 },
   game_max_files: 993,
   game_max_bytes: 50331648,
   game_path_max_bytes: 1000,
-});
+};
 
-const dossierPath = join(out, 'dossier.json');
-writeFileSync(dossierPath, dossier);
+/** Copy one directory into the output tree; a missing source is a warning, not a failure. */
+function copyDir(name: string): boolean {
+  const from = join(here, name);
+  if (!existsSync(from)) {
+    process.stderr.write(`[palm-city] no ${name}/ to copy\n`);
+    return false;
+  }
+  mkdirSync(join(outDir, name), { recursive: true });
+  cpSync(from, join(outDir, name), { recursive: true });
+  return true;
+}
 
-// One line for local debugging; the grader ignores stdout.
-console.log(
-  `[main] Palm City handed in: ${gameFiles} game file(s), ${shotFiles} screenshot(s), dossier ${Buffer.byteLength(dossier)} bytes -> ${dossierPath}`,
+/** Total regular files and bytes under a directory, for the one-line summary. */
+function tally(dir: string): { files: number; bytes: number } {
+  let files = 0;
+  let bytes = 0;
+  const walk = (p: string): void => {
+    let entries;
+    try {
+      entries = readdirSync(p, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = join(p, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.isFile()) {
+        files += 1;
+        bytes += statSync(full).size;
+      }
+    }
+  };
+  walk(dir);
+  return { files, bytes };
+}
+
+mkdirSync(outDir, { recursive: true });
+
+const haveGame = copyDir('game');
+const haveShots = copyDir('screenshots');
+
+const dossier = buildDossier(outDir, CAPS);
+writeFileSync(join(outDir, 'dossier.json'), dossier);
+
+const game = haveGame ? tally(join(outDir, 'game')) : { files: 0, bytes: 0 };
+const shot = haveShots ? tally(join(outDir, 'screenshots')).files : 0;
+const title = (() => {
+  try {
+    const html = readFileSync(join(outDir, 'game', 'index.html'), 'utf8');
+    return /<title>([^<]*)<\/title>/i.exec(html)?.[1]?.trim() ?? 'untitled';
+  } catch {
+    return 'untitled';
+  }
+})();
+
+process.stdout.write(
+  `[palm-city] ${title} — game ${game.files} files / ${game.bytes} bytes, ${shot} screenshots, dossier ${dossier.length} bytes -> ${outDir}\n`,
 );
