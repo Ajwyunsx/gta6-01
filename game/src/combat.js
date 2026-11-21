@@ -29,6 +29,9 @@
       var py = y + sin * d;
       if (px < 0 || py < 0 || px > CFG.WORLD_W || py > CFG.WORLD_H) { best = d; break; }
       if (world.city.hitBuilding(px, py, 4)) { best = d; hitKind = 'wall'; break; }
+      // mission crews
+      var hostile = world.hostileAt(px, py, 13);
+      if (hostile) { best = d; hitKind = 'hostile'; hitObj = hostile; break; }
       // pedestrians
       var ped = world.peds.nearest(px, py, 12, true);
       if (ped && ped.alive) { best = d; hitKind = 'ped'; hitObj = ped; break; }
@@ -85,6 +88,16 @@
         world.stats.peds++;
       } else {
         world.police.crime('assault', res.x, res.y);
+      }
+    } else if (res.kind === 'hostile' && res.obj) {
+      var h = res.obj;
+      h.health -= CFG.tuning.bulletDamage * 1.5;
+      h.hitFlash = 1;
+      world.effects.burst(res.x, res.y, '#ff5a5a', 6);
+      if (h.health <= 0 && h.alive) {
+        h.alive = false;
+        world.missions.onHostileDown();
+        world.effects.burst(h.x, h.y, '#2b2b33', 10);
       }
     } else if (res.kind === 'cop' && res.obj) {
       res.obj.health -= CFG.tuning.bulletDamage * 1.25;

@@ -22,6 +22,7 @@
     this.cars.seedParked();
     this.traffic = new PC.TrafficManager(this.city, this.cars, U.makeRng(CFG.SEED + 11));
     this.peds = new PC.PedManager(this.city, U.makeRng(CFG.SEED + 13));
+    this.streets = new PC.Streets(this.city, U.makeRng(CFG.SEED + 23));
     this.police = new PC.Police(this.city, this.cars, U.makeRng(CFG.SEED + 17));
     this.effects = new PC.Effects(U.makeRng(CFG.SEED + 19));
     this.combat = new PC.Combat(this);
@@ -238,6 +239,7 @@
     this.cars.updateDrivers(dt, this);
     this.traffic.update(dt, this);
     this.peds.update(dt, this);
+    this.streets.update(dt, this);
     this.police.update(dt, this);
     this.combat.update(dt);
     this.updateHostiles(dt);
@@ -270,6 +272,7 @@
   World.prototype.updateIdleWorld = function (dt, input) {
     this.traffic.update(dt, this);
     this.peds.update(dt, this);
+    this.streets.update(dt, this);
     this.effects.update(dt);
     if (this.ui.screen === 'title' && !this.player.inCar) {
       // a slow drift of the player's gaze so the title backdrop is alive
@@ -454,6 +457,10 @@
       if (U.dist(h.x, h.y, x, y) < radius) return h;
     }
     return null;
+  };
+
+  World.prototype.hostileAt = function (x, y, radius) {
+    return this.hostileHit(x, y, radius);
   };
 
   // ---- the chase runner -----------------------------------------------------

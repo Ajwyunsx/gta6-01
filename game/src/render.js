@@ -111,7 +111,9 @@
     this.drawMarkers(ctx, world, view);
     this.drawCars(ctx, world, view);
     this.drawPeds(ctx, world, view);
+    this.drawStreets(ctx, world, view);
     this.drawHostiles(ctx, world, view);
+    this.drawPoliceFoot(ctx, world, view);
     this.drawPlayer(ctx, world);
     this.drawAirFX(ctx, world, view);
 
@@ -711,17 +713,47 @@
     }
   };
 
+  Renderer.prototype.drawStreets = function (ctx, world, view) {
+    world.streets.draw(ctx, world, view);
+  };
+
+  // Mission crews: dark clothes, a red pip overhead, a drawn pistol.
   Renderer.prototype.drawHostiles = function (ctx, world, view) {
     for (var k = 0; k < world.hostiles.length; k++) {
       var h = world.hostiles[k];
-      if (!h.alive) continue;
       if (h.x < view.x || h.x > view.x + view.w || h.y < view.y || h.y > view.y + view.h) continue;
-      this.drawPerson(ctx, h.x, h.y, h.angle, h.stride, '#2b2b33', 1.05, true, h.hitFlash, true);
-      // a small red pip so they never get mistaken for a civilian
-      ctx.fillStyle = 'rgba(255,80,90,0.9)';
+      if (!h.alive) {
+        this.drawPerson(ctx, h.x, h.y, h.angle, 0, '#3a2f33', 1.05, false, 0, false);
+        continue;
+      }
+      this.drawPerson(ctx, h.x, h.y, h.angle, h.stride, h.tough > 1.1 ? '#241d28' : '#2b2b33', 1.05, true, h.hitFlash, true);
+      ctx.fillStyle = 'rgba(255,80,90,0.92)';
       ctx.beginPath();
-      ctx.arc(h.x, h.y - 22, 2.6, 0, 6.283);
+      ctx.arc(h.x, h.y - 24, 2.7, 0, 6.283);
       ctx.fill();
+      // a health pip over the crew's head when hurt
+      if (h.health < h.maxHealth) {
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(h.x - 11, h.y - 31, 22, 3);
+        ctx.fillStyle = '#ff5566';
+        ctx.fillRect(h.x - 11, h.y - 31, 22 * (h.health / h.maxHealth), 3);
+      }
+    }
+  };
+
+  // Officers who have left the cruiser, in navy with the badge flash.
+  Renderer.prototype.drawPoliceFoot = function (ctx, world, view) {
+    for (var k = 0; k < world.police.units.length; k++) {
+      var o = world.police.units[k].officer;
+      if (!o) continue;
+      if (o.x < view.x || o.x > view.x + view.w || o.y < view.y || o.y > view.y + view.h) continue;
+      this.drawPerson(ctx, o.x, o.y, o.angle, o.stride, CFG.colors.copDark, 1.06, o.alive, o.hitFlash, true);
+      if (o.alive) {
+        ctx.fillStyle = Math.sin(world.time * 12) > 0 ? CFG.colors.sirenRed : CFG.colors.sirenBlue;
+        ctx.beginPath();
+        ctx.arc(o.x, o.y - 24, 2.4, 0, 6.283);
+        ctx.fill();
+      }
     }
   };
 

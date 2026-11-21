@@ -131,7 +131,6 @@
 
     if (this.turn) {
       this.steerPath(dt);
-      car.drive(dt, { steer: 0, throttle: 0 }, city);
       car.occupied = true;
       car.driver = 'traffic';
       return;
