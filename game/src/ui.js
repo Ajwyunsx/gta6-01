@@ -1,417 +1,289 @@
-// ui.js — the furniture around the game: the title screen, the pause menu, the save/load
-// slate, the busted and wasted screens, and the job briefing card. Everything is drawn on
-// the same canvas with the same palette, so no page reload ever happens.
-(function () {
+// Palm City — the screens around the game: title, pause, mission briefing, busted,
+// save/load slots, and the small toasts that tell you what the city just did to you.
+(function (global) {
   'use strict';
-  var PC = window.PC;
-  var CFG = PC.CFG;
-  var U = PC.U;
-  var C = CFG.colors;
-  var UI = C.ui;
 
-  var MENU_ITEMS = [
-    { id: 'resume', label: 'Resume', hint: 'back to the street' },
-    { id: 'save', label: 'Save game', hint: 'the garage remembers' },
-    { id: 'load', label: 'Load game', hint: 'pick up where you left' },
-    { id: 'help', label: 'Controls', hint: 'keys and mouse' },
-    { id: 'restart', label: 'New game', hint: 'start the story again' },
-  ];
+  const PC = global.PC;
 
-  function UI_(world) {
-    this.world = world;
-    this.screen = 'title';           // title | playing | pause | help | mapping | dead | brief
-    this.selection = 0;
-    this.helpFrom = 'title';
-    this.deadTimer = 0;
-    this.deadReason = '';
-    this.clock = 0;
-    this.tipIndex = 0;
-    this.tipClock = 0;
-    this.confirm = null;
-    this.titleSelection = 0;
+  const SAVE_KEY = 'palmcity.save.v1';
+
+  /** One-line toast queue: cash, pickups, arrests, job completions. */
+  function makeToasts() {
+    return [];
   }
 
-  UI_.prototype.openTitle = function () {
-    this.screen = 'title';
-    this.titleSelection = 0;
-  };
+  function toast(toasts, text, colour) {
+    toasts.push({ text, colour: colour || PC.PALETTE.hud, life: 3.4, max: 3.4 });
+  }
 
-  UI_.prototype.openPause = function () {
-    this.screen = 'pause';
-    this.selection = 0;
-  };
-
-  UI_.prototype.openHelp = function () {
-    this.helpFrom = this.screen;
-    this.screen = 'help';
-  };
-
-  UI_.prototype.closeHelp = function () {
-    this.screen = this.helpFrom === 'title' ? 'title' : 'pause';
-  };
-
-  UI_.prototype.dead = function (reason) {
-    this.screen = 'dead';
-    this.deadReason = reason;
-    this.deadTimer = 0;
-  };
-
-  UI_.prototype.update = function (dt) {
-    this.clock += dt;
-    if (this.screen === 'dead') {
-      this.deadTimer += dt;
+  function tickToasts(toasts, dt) {
+    for (let i = toasts.length - 1; i >= 0; i--) {
+      toasts[i].life -= dt;
+      if (toasts[i].life <= 0) toasts.splice(i, 1);
     }
-    this.tipClock += dt;
-    if (this.tipClock > 9) {
-      this.tipClock = 0;
-      this.tipIndex = (this.tipIndex + 1) % TIPS.length;
-    }
-  };
+  }
 
-  // ---- input -----------------------------------------------------------------
-  UI_.prototype.key = function (code) {
-    var world = this.world;
-    if (this.screen === 'title') {
-      if (code === 'ArrowDown' || code === 'KeyS') this.titleSelection = (this.titleSelection + 1) % 2;
-      if (code === 'ArrowUp' || code === 'KeyW') this.titleSelection = (this.titleSelection + 1) % 2;
-      if (code === 'Enter' || code === 'Space') {
-        if (this.titleSelection === 0) {
-          world.startNewGame();
-          this.screen = 'playing';
-        } else {
-          this.screen = 'mapping';
-        }
-      }
-      return true;
-    }
-    if (this.screen === 'mapping') {
-      if (world.load()) this.screen = 'playing';
-      else this.screen = 'title';
-      return true;
-    }
-    if (this.screen === 'help') {
-      if (code === 'Escape' || code === 'Enter' || code === 'KeyH') this.closeHelp();
-      return true;
-    }
-    if (this.screen === 'dead') {
-      if (this.deadTimer > 1.2 && (code === 'Enter' || code === 'Space')) {
-        world.respawn();
-        this.screen = 'playing';
-      }
-      return true;
-    }
-    if (this.screen === 'pause') {
-      if (code === 'Escape' || code === 'KeyP') { this.screen = 'playing'; return true; }
-      if (code === 'ArrowDown' || code === 'KeyS') this.selection = (this.selection + 1) % MENU_ITEMS.length;
-      if (code === 'ArrowUp' || code === 'KeyW') this.selection = (this.selection + MENU_ITEMS.length - 1) % MENU_ITEMS.length;
-      if (code === 'Enter' || code === 'Space') this.activate(MENU_ITEMS[this.selection].id);
-      return true;
-    }
-    if (this.screen === 'playing') {
-      if (code === 'Escape' || code === 'KeyP') { this.openPause(); return true; }
-      if (code === 'KeyH') { this.openHelp(); return true; }
-    }
-    return false;
-  };
-
-  UI_.prototype.activate = function (id) {
-    var world = this.world;
-    if (id === 'resume') this.screen = 'playing';
-    else if (id === 'save') {
-      world.save();
-      world.hud.toast('Game saved');
-      this.screen = 'playing';
-    } else if (id === 'load') {
-      if (world.load()) {
-        this.screen = 'playing';
-        world.hud.toast('Game loaded');
-      } else {
-        world.hud.toast('No save found');
-      }
-    } else if (id === 'help') this.openHelp();
-    else if (id === 'restart') {
-      world.startNewGame();
-      this.screen = 'playing';
-    }
-  };
-
-  // ---- drawing ---------------------------------------------------------------
-  UI_.prototype.draw = function (ctx, w, h) {
-    if (this.screen === 'title') this.drawTitle(ctx, w, h);
-    else if (this.screen === 'pause') this.drawPause(ctx, w, h);
-    else if (this.screen === 'help') this.drawHelp(ctx, w, h);
-    else if (this.screen === 'dead') this.drawDead(ctx, w, h);
-    else if (this.screen === 'mapping') this.drawMapping(ctx, w, h);
-  };
-
-  UI_.prototype.drawTitle = function (ctx, w, h) {
-    var grad = ctx.createLinearGradient(0, 0, w, h);
-    grad.addColorStop(0, 'rgba(10,8,16,0.78)');
-    grad.addColorStop(0.55, 'rgba(22,14,30,0.42)');
-    grad.addColorStop(1, 'rgba(10,8,16,0.86)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, w, h);
-
-    // sun disc behind the wordmark — the one piece of art the title screen owns
-    ctx.save();
-    var sunX = w * 0.72, sunY = h * 0.34, sunR = h * 0.3;
-    var sg = ctx.createRadialGradient(sunX, sunY, sunR * 0.2, sunX, sunY, sunR);
-    sg.addColorStop(0, 'rgba(255,142,110,0.75)');
-    sg.addColorStop(0.55, 'rgba(255,95,162,0.28)');
-    sg.addColorStop(1, 'rgba(255,95,162,0)');
-    ctx.fillStyle = sg;
-    ctx.beginPath();
-    ctx.arc(sunX, sunY, sunR, 0, 6.283);
-    ctx.fill();
-    // horizontal retro bands cut through the disc
-    ctx.globalCompositeOperation = 'destination-out';
-    for (var i = 0; i < 7; i++) {
-      var by = sunY + sunR * 0.12 + i * (sunR * 0.115);
-      ctx.fillRect(sunX - sunR, by, sunR * 2, sunR * 0.045 + i * 0.8);
-    }
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.restore();
-
-    ctx.save();
+  function drawToasts(ctx, toasts, W) {
     ctx.textAlign = 'left';
-    var x = w * 0.085;
-    var y = h * 0.34;
-    ctx.fillStyle = UI.cream;
-    ctx.font = '800 ' + Math.round(h * 0.115) + 'px ui-sans-serif, system-ui, sans-serif';
-    ctx.shadowColor = 'rgba(0,0,0,0.55)';
-    ctx.shadowBlur = 22;
-    ctx.fillText('PALM', x, y);
-    ctx.fillText('CITY', x, y + h * 0.115);
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = UI.coral;
-    ctx.fillRect(x + 4, y + h * 0.137, Math.round(w * 0.14), 5);
-
-    ctx.fillStyle = 'rgba(247,240,225,0.72)';
-    ctx.font = '500 ' + Math.round(h * 0.021) + 'px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText('An open-world crime story on the Gulf coast.', x + 2, y + h * 0.175);
-    ctx.fillText('Seven jobs. One city. Nobody is coming to help.', x + 2, y + h * 0.205);
-
-    // menu
-    var my = h * 0.66;
-    var items = ['New game', 'Continue'];
-    for (var k = 0; k < items.length; k++) {
-      var selected = k === this.titleSelection;
-      var iy = my + k * 42;
-      if (selected) {
-        ctx.fillStyle = 'rgba(255,95,162,0.16)';
-        U.roundRect(ctx, x - 10, iy - 24, 240, 34, 8);
-        ctx.fill();
-        ctx.fillStyle = UI.pink;
-        ctx.fillRect(x - 10, iy - 24, 3, 34);
-      }
-      ctx.fillStyle = selected ? UI.cream : 'rgba(247,240,225,0.55)';
-      ctx.font = (selected ? '700 ' : '500 ') + Math.round(h * 0.026) + 'px ui-sans-serif, system-ui, sans-serif';
-      ctx.fillText(items[k], x + 6, iy);
+    ctx.font = '600 14px "Inter", "Segoe UI", system-ui, sans-serif';
+    let y = 110;
+    for (const t of toasts) {
+      const alpha = Math.min(1, t.life / 0.6);
+      ctx.globalAlpha = alpha;
+      const w = ctx.measureText(t.text).width + 26;
+      ctx.fillStyle = 'rgba(10,12,18,0.62)';
+      ctx.fillRect(24, y - 16, w, 26);
+      ctx.fillStyle = t.colour;
+      ctx.fillRect(24, y - 16, 3, 26);
+      ctx.fillStyle = t.colour;
+      ctx.fillText(t.text, 38, y + 2);
+      ctx.globalAlpha = 1;
+      y += 32;
     }
+  }
 
-    // footer: controls and the tip line
-    ctx.fillStyle = 'rgba(247,240,225,0.45)';
-    ctx.font = '500 ' + Math.round(h * 0.016) + 'px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText('WASD walk · SHIFT sprint · click/SPACE no — E to enter a car · F to fire · ESC pause', x + 2, h - 54);
-    ctx.fillStyle = 'rgba(247,240,225,0.30)';
-    ctx.fillText(TIPS[this.tipIndex], x + 2, h - 30);
-    ctx.restore();
-  };
+  /** A soft full-screen scrim with a centred panel; every menu uses it. */
+  function panel(ctx, W, H, alpha) {
+    ctx.fillStyle = `rgba(8,10,16,${alpha ?? 0.62})`;
+    ctx.fillRect(0, 0, W, H);
+  }
 
-  UI_.prototype.drawPause = function (ctx, w, h) {
-    ctx.save();
-    ctx.fillStyle = 'rgba(10,8,16,0.66)';
-    ctx.fillRect(0, 0, w, h);
-    var pw = 340, ph = 60 + MENU_ITEMS.length * 46;
-    var px = w / 2 - pw / 2, py = h / 2 - ph / 2;
-    U.roundRect(ctx, px, py, pw, ph, 16);
-    ctx.fillStyle = 'rgba(20,16,25,0.94)';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(247,240,225,0.14)';
+  function centred(ctx, W, H, w, h) {
+    const x = (W - w) / 2;
+    const y = (H - h) / 2;
+    ctx.fillStyle = 'rgba(18,20,28,0.94)';
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = 'rgba(247,239,224,0.16)';
     ctx.lineWidth = 1;
-    ctx.stroke();
-
-    ctx.textAlign = 'left';
-    ctx.fillStyle = UI.coral;
-    ctx.font = '700 12px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText('PAUSED', px + 26, py + 34);
-    ctx.fillStyle = UI.cream;
-    ctx.font = '800 22px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText('Palm City', px + 26, py + 58);
-
-    for (var k = 0; k < MENU_ITEMS.length; k++) {
-      var item = MENU_ITEMS[k];
-      var iy = py + 92 + k * 46;
-      var sel = k === this.selection;
-      if (sel) {
-        ctx.fillStyle = 'rgba(255,95,162,0.14)';
-        U.roundRect(ctx, px + 18, iy - 22, pw - 36, 34, 8);
-        ctx.fill();
-      }
-      ctx.fillStyle = sel ? UI.cream : 'rgba(247,240,225,0.6)';
-      ctx.font = (sel ? '700 ' : '500 ') + '15px ui-sans-serif, system-ui, sans-serif';
-      ctx.fillText(item.label, px + 32, iy);
-      ctx.fillStyle = 'rgba(247,240,225,0.34)';
-      ctx.font = '500 11px ui-sans-serif, system-ui, sans-serif';
-      ctx.textAlign = 'right';
-      ctx.fillText(item.hint, px + pw - 32, iy);
-      ctx.textAlign = 'left';
-    }
-    ctx.fillStyle = 'rgba(247,240,225,0.35)';
-    ctx.font = '500 11px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText('ESC resume · ↑↓ choose · ENTER select', px + 26, py + ph - 18);
-    ctx.restore();
-  };
-
-  UI_.prototype.drawHelp = function (ctx, w, h) {
-    ctx.save();
-    ctx.fillStyle = 'rgba(10,8,16,0.86)';
-    ctx.fillRect(0, 0, w, h);
-    var rows = [
-      ['W A S D', 'walk'],
-      ['SHIFT', 'sprint'],
-      ['E', 'enter / leave a car, start a job'],
-      ['F / click', 'fire (hold to keep firing)'],
-      ['SPACE', 'handbrake in a car, punch on foot'],
-      ['MOUSE', 'aim and steer the camera'],
-      ['ESC / P', 'pause, save and load'],
-      ['H', 'this screen'],
-    ];
-    var pw = Math.min(760, w - 120);
-    var px = w / 2 - pw / 2;
-    var py = h / 2 - 220;
-    ctx.fillStyle = UI.cream;
-    ctx.font = '800 26px ui-sans-serif, system-ui, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText('Controls', px, py);
-    ctx.fillStyle = UI.coral;
-    ctx.fillRect(px, py + 12, 60, 4);
-
-    for (var k = 0; k < rows.length; k++) {
-      var y = py + 54 + k * 34;
-      ctx.fillStyle = 'rgba(247,240,225,0.94)';
-      ctx.font = '700 13px ui-monospace, monospace';
-      ctx.fillText(rows[k][0], px, y);
-      ctx.fillStyle = 'rgba(247,240,225,0.6)';
-      ctx.font = '500 13px ui-sans-serif, system-ui, sans-serif';
-      ctx.fillText(rows[k][1], px + 150, y);
-    }
-    ctx.fillStyle = 'rgba(247,240,225,0.4)';
-    ctx.font = '500 12px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText('Press ESC to go back.', px, py + 54 + rows.length * 34 + 16);
-    ctx.restore();
-  };
-
-  UI_.prototype.drawDead = function (ctx, w, h) {
-    var a = U.clamp(this.deadTimer / 0.7, 0, 1);
-    ctx.save();
-    ctx.fillStyle = 'rgba(72,10,18,' + (0.72 * a) + ')';
-    ctx.fillRect(0, 0, w, h);
-    ctx.textAlign = 'center';
-    ctx.globalAlpha = a;
-    ctx.fillStyle = '#ffe9e9';
-    ctx.font = '800 62px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText(this.deadReason || 'WASTED', w / 2, h / 2 - 10);
-    ctx.fillStyle = 'rgba(255,233,233,0.7)';
-    ctx.font = '500 16px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText(this.deadReason === 'BUSTED' ? 'The city keeps the car. You keep the record.' : 'The heat cools. The story does not.', w / 2, h / 2 + 28);
-    if (this.deadTimer > 1.2) {
-      ctx.fillStyle = 'rgba(255,233,233,' + (0.5 + Math.sin(this.clock * 4) * 0.3) + ')';
-      ctx.font = '600 14px ui-sans-serif, system-ui, sans-serif';
-      ctx.fillText('ENTER to get back up', w / 2, h / 2 + 82);
-    }
-    ctx.restore();
-  };
-
-  UI_.prototype.drawMapping = function (ctx, w, h) {
-    ctx.save();
-    ctx.fillStyle = 'rgba(10,8,16,0.9)';
-    ctx.fillRect(0, 0, w, h);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = UI.cream;
-    ctx.font = '800 30px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText('No save to continue', w / 2, h / 2 - 10);
-    ctx.fillStyle = 'rgba(247,240,225,0.6)';
-    ctx.font = '500 14px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText('Press ENTER to start a new game.', w / 2, h / 2 + 26);
-    ctx.restore();
-  };
-
-  // The job briefing card, drawn over the game while it is paused.
-  UI_.prototype.drawBriefing = function (ctx, w, h, briefing) {
-    if (!briefing) return;
-    var job = briefing.job;
-    ctx.save();
-    ctx.fillStyle = 'rgba(10,8,16,0.34)';
-    ctx.fillRect(0, 0, w, h);
-    var pw = Math.min(560, w - 80);
-    var px = w / 2 - pw / 2;
-    var py = h / 2 - 190;
-    U.roundRect(ctx, px, py, pw, 380, 18);
-    ctx.fillStyle = 'rgba(20,16,25,0.96)';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,203,82,0.35)';
-    ctx.lineWidth = 1.4;
-    ctx.stroke();
-
-    ctx.textAlign = 'left';
-    ctx.fillStyle = UI.gold || '#ffcb52';
-    ctx.font = '700 11px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText('JOB ' + (this.world.missions.index + 1) + ' OF 7', px + 30, py + 36);
-    ctx.fillStyle = UI.cream;
-    ctx.font = '800 32px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText(job.title, px + 30, py + 74);
-    ctx.fillStyle = UI.coral;
-    ctx.fillRect(px + 30, py + 90, 52, 4);
-
-    ctx.fillStyle = 'rgba(247,240,225,0.55)';
-    ctx.font = '600 12px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText(job.giver, px + 30, py + 118);
-
-    ctx.fillStyle = 'rgba(247,240,225,0.86)';
-    ctx.font = '500 14px ui-sans-serif, system-ui, sans-serif';
-    wrap(ctx, job.brief, px + 30, py + 150, pw - 60, 21, 5);
-
-    ctx.fillStyle = UI.teal;
-    ctx.font = '700 13px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText(job.objective.toUpperCase(), px + 30, py + 286);
-
-    ctx.fillStyle = 'rgba(247,240,225,0.8)';
-    ctx.font = '700 16px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText('Pays ' + U.money(job.payout), px + 30, py + 322);
-
-    ctx.fillStyle = 'rgba(247,240,225,' + (0.45 + Math.sin(this.clock * 4) * 0.25) + ')';
-    ctx.font = '600 12px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText('E to start · WALK AWAY to think about it', px + 30, py + 354);
-    ctx.restore();
-  };
-
-  function wrap(ctx, text, x, y, maxW, lineH, maxLines) {
-    var words = String(text).split(' ');
-    var line = '';
-    var lines = [];
-    for (var i = 0; i < words.length; i++) {
-      var test = line ? line + ' ' + words[i] : words[i];
-      if (ctx.measureText(test).width > maxW && line) {
-        lines.push(line);
-        line = words[i];
-        if (lines.length === maxLines) break;
-      } else line = test;
-    }
-    if (lines.length < maxLines && line) lines.push(line);
-    for (var k = 0; k < lines.length; k++) ctx.fillText(lines[k], x, y + k * lineH);
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    return { x, y, w, h };
   }
 
-  var TIPS = [
-    'Pedestrians mind their own business until a car comes through. Then they scatter.',
-    'Steal a car and drive it into the sea: the police still count it as yours.',
-    'Every star is another cruiser. Five stars is a conversation you will not enjoy.',
-    'Jobs pay in cash. Cash is not a score. Cash is a lifestyle.',
-    'The minimap is drawn from the city itself: what you see is what is there.',
-    'Lose the police by getting out of sight and staying quiet. Nine seconds of peace begins it.',
-    'The beach has no speed limit enforcement. The beach also has no road.',
-  ];
+  /**
+   * The title screen: the city behind it, a sun-washed logo, the story hook, and the
+   * controls. The player presses Enter to begin.
+   */
+  function drawTitle(ctx, W, H, state) {
+    // Warm wash over the live city.
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, 'rgba(255,196,140,0.42)');
+    g.addColorStop(0.45, 'rgba(20,18,30,0.52)');
+    g.addColorStop(1, 'rgba(10,10,18,0.86)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
 
-  PC.UI = UI_;
-  PC.UI_MENU = MENU_ITEMS;
-})();
+    ctx.textAlign = 'center';
+
+    // Logo.
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,120,60,0.55)';
+    ctx.shadowBlur = 34;
+    ctx.font = '800 86px "Inter", "Segoe UI", system-ui, sans-serif';
+    ctx.fillStyle = '#fff4e2';
+    ctx.fillText('PALM CITY', W / 2, H * 0.34);
+    ctx.restore();
+
+    ctx.font = '600 15px "Inter", "Segoe UI", system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(255,240,220,0.72)';
+    ctx.fillText('S U N S T A T E   ·   T H R E E   M I L E S   O F   C O A S T', W / 2, H * 0.34 + 34);
+
+    ctx.font = '400 17px "Inter", "Segoe UI", system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(255,246,232,0.86)';
+    ctx.fillText('Seven jobs. One coast. Nobody leaves clean.', W / 2, H * 0.34 + 78);
+
+    // Start prompt, pulsing.
+    const pulse = 0.62 + Math.sin(state.time * 3) * 0.28;
+    ctx.globalAlpha = pulse;
+    ctx.font = '700 20px "Inter", "Segoe UI", system-ui, sans-serif';
+    ctx.fillStyle = '#ffd9a8';
+    ctx.fillText('PRESS  ENTER  TO  START', W / 2, H * 0.62);
+    ctx.globalAlpha = 1;
+
+    // Controls, in two tidy columns.
+    ctx.textAlign = 'left';
+    ctx.font = '500 13px "Inter", "Segoe UI", system-ui, sans-serif';
+    const rows = [
+      ['W A S D', 'walk / drive'],
+      ['SHIFT', 'sprint'],
+      ['E', 'steal / leave a car'],
+      ['SPACE', 'handbrake'],
+      ['MOUSE', 'aim'],
+      ['LEFT CLICK', 'fire'],
+      ['TAB', 'jobs'],
+      ['ESC', 'pause / save'],
+    ];
+    const colWidth = 210;
+    const startX = W / 2 - colWidth;
+    const startY = H * 0.70;
+    rows.forEach((row, i) => {
+      const x = startX + (i % 2) * colWidth;
+      const y = startY + Math.floor(i / 2) * 24;
+      ctx.fillStyle = 'rgba(255,231,196,0.95)';
+      ctx.fillText(row[0], x, y);
+      ctx.fillStyle = 'rgba(255,246,232,0.55)';
+      ctx.fillText(row[1], x + 92, y);
+    });
+  }
+
+  function drawPause(ctx, W, H, sel) {
+    panel(ctx, W, H, 0.66);
+    const box = centred(ctx, W, H, 420, 300);
+    ctx.textAlign = 'center';
+    ctx.font = '800 30px "Inter", "Segoe UI", system-ui, sans-serif';
+    ctx.fillStyle = PC.PALETTE.hud;
+    ctx.fillText('PAUSED', W / 2, box.y + 56);
+
+    const items = ['Resume', 'Save game', 'Load game', 'Quit to title'];
+    ctx.font = '600 17px "Inter", "Segoe UI", system-ui, sans-serif';
+    items.forEach((item, i) => {
+      const y = box.y + 118 + i * 40;
+      if (i === sel) {
+        ctx.fillStyle = 'rgba(255,209,102,0.16)';
+        ctx.fillRect(box.x + 60, y - 24, box.w - 120, 34);
+        ctx.fillStyle = PC.PALETTE.gold;
+      } else {
+        ctx.fillStyle = 'rgba(247,239,224,0.72)';
+      }
+      ctx.fillText(item, W / 2, y);
+    });
+
+    ctx.font = '500 12px "Inter", system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(247,239,224,0.40)';
+    ctx.fillText('↑ ↓  choose    ENTER  confirm    ESC  resume', W / 2, box.y + box.h - 24);
+  }
+
+  /** The mission briefing card: contact, job title, the pitch, and the objective. */
+  function drawBriefing(ctx, W, H, job) {
+    panel(ctx, W, H, 0.70);
+    const box = centred(ctx, W, H, 760, 380);
+
+    ctx.textAlign = 'left';
+    ctx.font = '600 12px "Inter", system-ui, sans-serif';
+    ctx.fillStyle = PC.PALETTE.accent;
+    ctx.fillText(`JOB ${(PC.Missions.JOBS.indexOf(job) + 1)} OF ${PC.Missions.JOBS.length}  ·  ${job.contact.toUpperCase()}`, box.x + 44, box.y + 52);
+
+    ctx.font = '800 34px "Inter", "Segoe UI", system-ui, sans-serif';
+    ctx.fillStyle = PC.PALETTE.hud;
+    ctx.fillText(job.title, box.x + 44, box.y + 96);
+
+    // Wrap the pitch.
+    ctx.font = '400 15px "Inter", "Segoe UI", system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(247,239,224,0.80)';
+    const words = job.briefing.split(' ');
+    let line = '';
+    let y = box.y + 132;
+    for (const word of words) {
+      const test = line ? line + ' ' + word : word;
+      if (ctx.measureText(test).width > box.w - 88) {
+        ctx.fillText(line, box.x + 44, y);
+        y += 23;
+        line = word;
+      } else {
+        line = test;
+      }
+    }
+    if (line) ctx.fillText(line, box.x + 44, y);
+
+    // Objective and reward.
+    const oy = box.y + box.h - 92;
+    ctx.fillStyle = 'rgba(255,209,102,0.10)';
+    ctx.fillRect(box.x + 40, oy - 26, box.w - 80, 56);
+    ctx.font = '600 14px "Inter", "Segoe UI", system-ui, sans-serif';
+    ctx.fillStyle = PC.PALETTE.gold;
+    ctx.fillText(job.objective, box.x + 54, oy);
+    ctx.font = '700 15px "Inter", system-ui, sans-serif';
+    ctx.fillStyle = '#9ce0a8';
+    ctx.textAlign = 'right';
+    ctx.fillText(`PAYS ${PC.money(job.reward)}`, box.x + box.w - 54, oy);
+
+    ctx.textAlign = 'center';
+    ctx.font = '500 12px "Inter", system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(247,239,224,0.42)';
+    ctx.fillText('ENTER  accept the job        ESC  not now', W / 2, box.y + box.h - 14);
+  }
+
+  function drawBusted(ctx, W, H, fade) {
+    ctx.fillStyle = `rgba(6,8,14,${fade})`;
+    ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = 'center';
+    ctx.font = '800 74px "Inter", "Segoe UI", system-ui, sans-serif';
+    ctx.fillStyle = '#dfe6f5';
+    ctx.fillText('BUSTED', W / 2, H / 2);
+    ctx.font = '500 15px "Inter", system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(223,230,245,0.66)';
+    ctx.fillText('They took the cash. Keep the story.', W / 2, H / 2 + 38);
+  }
+
+  function drawWasted(ctx, W, H, fade) {
+    ctx.fillStyle = `rgba(28,6,8,${fade})`;
+    ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = 'center';
+    ctx.font = '800 74px "Inter", "Segoe UI", system-ui, sans-serif';
+    ctx.fillStyle = '#f3d7d7';
+    ctx.fillText('WASTED', W / 2, H / 2);
+    ctx.font = '500 15px "Inter", system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(243,215,215,0.7)';
+    ctx.fillText('The coast does not forgive. Try again.', W / 2, H / 2 + 38);
+  }
+
+  /** Save/load: one slot each, in localStorage, with a readable stamp. */
+  function saveGame(state) {
+    const { player, missions, city, wanted } = state;
+    const data = {
+      v: 1,
+      savedAt: new Date().toISOString(),
+      cash: player.cash,
+      health: player.health,
+      armour: player.armour,
+      ammo: player.ammo,
+      x: player.x,
+      y: player.y,
+      jobIndex: missions.index,
+      completed: missions.story.completed.slice(),
+      seed: city.seed,
+      heat: wanted.heat,
+    };
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function loadGame() {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      if (!data || data.v !== 1) return null;
+      return data;
+    } catch {
+      return null;
+    }
+  }
+
+  function hasSave() {
+    try {
+      return localStorage.getItem(SAVE_KEY) !== null;
+    } catch {
+      return false;
+    }
+  }
+
+  PC.UI = {
+    makeToasts,
+    toast,
+    tickToasts,
+    drawToasts,
+    drawTitle,
+    drawPause,
+    drawBriefing,
+    drawBusted,
+    drawWasted,
+    panel,
+    saveGame,
+    loadGame,
+    hasSave,
+  };
+})(window);
