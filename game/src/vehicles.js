@@ -1,238 +1,230 @@
-/* Palm City — cars. One flat model for everything on wheels: a body rectangle, a heading, a
-   speed along that heading and a steering angle. Pressing E beside a parked car or an occupied
-   one puts the player in it; the owner may object, which is where the wanted level starts.
-   Palettes and silhouettes are this city's own: candy-coloured compacts, low cruisers, panel vans. */
-(function (PC) {
+// vehicles.js — cars: parked cars to steal, arcade driving physics, and the car the player is in.
+// A car is a box that grips the road when rolling and slides when it isn't; steering rotates the
+// heading and the velocity is bent toward it. Damage comes from collisions and bullets.
+(function () {
   'use strict';
+  var PC = window.PC;
+  var CFG = PC.CFG;
+  var U = PC.U;
 
-  var C = PC.CONFIG, P = PC.PALETTE, U = PC.util;
-
-  var BODY_TYPES = [
-    { id: 'compact', len: 44, wid: 23, top: 172, mass: 1.0 },
-    { id: 'sedan', len: 54, wid: 26, top: 200, mass: 1.15 },
-    { id: 'coupe', len: 58, wid: 27, top: 250, mass: 1.05 },
-    { id: 'van', len: 66, wid: 29, top: 140, mass: 1.5 },
-    { id: 'pickup', len: 60, wid: 28, top: 165, mass: 1.35 }
+  var MODELS = [
+    { name: 'Coral GT', body: '#e2684f', trim: '#f6e5c8', len: 92, wid: 46, top: 700, accel: 760, handling: 1.08, seats: 2 },
+    { name: 'Tide Runner', body: '#2f9e96', trim: '#dff2ee', len: 96, wid: 48, top: 660, accel: 700, handling: 1.0, seats: 4 },
+    { name: 'Palmetto Van', body: '#e7dac0', trim: '#8b8377', len: 118, wid: 56, top: 560, accel: 560, handling: 0.78, seats: 4 },
+    { name: 'Night Heron', body: '#5a4b72', trim: '#c9c0dd', len: 94, wid: 47, top: 720, accel: 780, handling: 1.14, seats: 2 },
+    { name: 'Dune Buggy', body: '#d9a35a', trim: '#4a3d2f', len: 84, wid: 50, top: 620, accel: 720, handling: 1.2, seats: 2 },
+    { name: 'Harbour Pickup', body: '#98a49c', trim: '#6f685e', len: 112, wid: 54, top: 590, accel: 620, handling: 0.86, seats: 2 },
+    { name: 'Neon Pike Cab', body: '#ffcb52', trim: '#2a2630', len: 100, wid: 48, top: 640, accel: 660, handling: 0.94, seats: 4 },
+    { name: 'Saltwater Coupe', body: '#8d4a63', trim: '#f0d6df', len: 88, wid: 45, top: 740, accel: 800, handling: 1.18, seats: 2 },
   ];
-  var PAINT = ['#d94f4f', '#e8a13a', '#4b9fd4', '#7bc6a1', '#e6e0d4', '#4a4e69', '#c05e8f', '#2f3b4a', '#f0d067', '#3f8f8a', '#a2583d'];
-  var GLASS = '#2d3f49';
 
-  function makeCar(x, y, angle, opts) {
-    opts = opts || {};
-    var rng = opts.rng || PC.makeRng(1);
-    var type = opts.type ? findType(opts.type) : U.pick(rng, BODY_TYPES);
-    var car = {
-      x: x, y: y, angle: angle || 0,
-      speed: 0, steer: 0,
-      type: type.id, len: type.len, wid: type.wid, top: type.top, mass: type.mass,
-      paint: opts.paint || U.pick(rng, PAINT),
-      glass: GLASS,
-      health: C.CAR.health,
-      driver: null,          // 'player' when the player is at the wheel
-      occupied: false,       // an NPC owns it (honks, gets angry when stolen)
-      parked: !!opts.parked,
-      police: !!opts.police,
-      cruiserLights: 0,
-      sirenOn: false,
-      brake: false,
-      wobble: 0,
-      smoke: 0,
-      id: Math.floor(rng() * 1e9)
-    };
-    return car;
+  function Car(x, y, angle, model, rng) {
+    this.x = x;
+    this.y = y;
+    this.angle = angle;
+    this.vx = 0;
+    this.vy = 0;
+    this.speed = 0;
+    this.steer = 0;
+    this.model = model || MODELS[0];
+    this.len = this.model.len;
+    this.wid = this.model.wid;
+    this.radius = this.wid * 0.62;
+    this.health = CFG.tuning.carHealth;
+    this.maxHealth = CFG.tuning.carHealth;
+    this.driver = null;          // 'player' | 'traffic' | 'police' | null
+    this.occupied = false;
+    this.siren = false;
+    this.paint = this.model.body;
+    this.rng = rng || Math.random;
+    this.smoke = 0;
+    this.wheelTurn = 0;
+    this.nose = 0;
+    this.dent = 0;
+    this.brakeLight = 0;
+    this.horn = 0;
   }
 
-  function findType(id) {
-    for (var i = 0; i < BODY_TYPES.length; i++) if (BODY_TYPES[i].id === id) return BODY_TYPES[i];
-    return BODY_TYPES[1];
-  }
+  Car.prototype.forward = function () {
+    return { x: Math.cos(this.angle), y: Math.sin(this.angle) };
+  };
 
-  /* ---------- driving ---------- */
+  // Arcade physics: throttle along the heading, grip pulls velocity toward it,
+  // and the handbrake lets the tail slide. Collisions cost speed and paint.
+  Car.prototype.drive = function (dt, controls, city) {
+    var T = CFG.tuning;
+    var m = this.model;
+    var throttle = controls.throttle || 0;
+    var steerInput = controls.steer || 0;
+    var maxSpeed = m.top * (controls.boost ? 1.12 : 1);
 
-  function updateCar(car, input, dt, world, isPlayer) {
-    var wantThrottle = 0, wantSteer = 0, wantBrake = false;
-    if (isPlayer) {
-      if (input.keys.up) wantThrottle += 1;
-      if (input.keys.down) wantThrottle -= 1;
-      if (input.keys.left) wantSteer -= 1;
-      if (input.keys.right) wantSteer += 1;
-      wantBrake = !!input.keys.brake;
-    }
-    applyDrive(car, wantThrottle, wantSteer, wantBrake, dt, world);
-  }
+    this.steer = U.damp(this.steer, steerInput, 9, dt);
+    this.wheelTurn = this.steer;
 
-  function applyDrive(car, throttle, steerIn, brake, dt, world) {
-    var maxF = Math.min(car.top, C.CAR.maxSpeed) * (car.police ? 1.06 : 1);
-    var accel = C.CAR.accel * (throttle > 0 ? 1 : 0.62);
+    var fx = Math.cos(this.angle), fy = Math.sin(this.angle);
+    var along = this.vx * fx + this.vy * fy;
 
+    // throttle is engine force; reverse is weaker and only when nearly stopped
+    var accel = m.accel * m.handling;
     if (throttle > 0) {
-      car.speed += accel * dt * throttle;
+      if (along < maxSpeed) along += accel * throttle * dt;
     } else if (throttle < 0) {
-      if (car.speed > 4) car.speed -= C.CAR.brake * dt;     // braking with reverse held
-      else car.speed += accel * 0.6 * dt * throttle;
+      if (along > -T.carReverseMax) along += accel * 0.5 * throttle * dt;
     }
-    if (brake) car.speed = U.approach(car.speed, 0, C.CAR.brake * 1.4 * dt);
-
-    // drag and a top speed that reverses lower than forwards
-    var top = car.speed >= 0 ? maxF : C.CAR.reverseMax;
-    car.speed = U.clamp(car.speed, -C.CAR.reverseMax, top);
-    if (throttle === 0) car.speed = U.approach(car.speed, 0, C.CAR.drag * dt * (car.speed > 0 ? 1 : -1));
-
-    // steering is strongest at low speed and fades at the top end
-    var grip = Math.min(1, Math.abs(car.speed) / 60);
-    var rate = C.CAR.turnRate * grip * (1 - Math.min(0.55, Math.abs(car.speed) / maxF * 0.55));
-    if (car.speed < 0) rate = -rate;
-    car.steer = U.approach(car.steer, steerIn * rate, dt * 12);
-    car.angle += car.steer * dt;
-
-    car.brake = brake || (throttle < 0 && car.speed > 20);
-
-    var nx = car.x + Math.cos(car.angle) * car.speed * dt;
-    var ny = car.y + Math.sin(car.angle) * car.speed * dt;
-
-    // Buildings stop a car hard: back off, kill most of the speed, add a wobble.
-    if (PC.city.collideCircle(world.city, nx, ny, car.wid * 0.5)) {
-      var impact = Math.abs(car.speed);
-      car.speed *= -0.22;
-      car.health = Math.max(0, car.health - impact * 0.09);
-      car.wobble = Math.min(1, impact / 220);
-      if (impact > 90) world.effects.burst(nx, ny, 8, '#cfc6b2', 160);
-      nx = car.x; ny = car.y;
+    if (controls.brake) {
+      along = U.damp(along, 0, T.carBrake / 120, dt);
+      this.brakeLight = 1;
     } else {
-      car.x = nx; car.y = ny;
+      this.brakeLight = Math.max(0, this.brakeLight - dt * 6);
     }
+    // rolling drag, plus extra when coasting
+    along *= 1 - Math.min(1, (controls.brake ? 0.6 : 0.28) * dt);
+    along = U.clamp(along, -T.carReverseMax, maxSpeed);
 
-    var minX = 14, maxX = C.CITY_W - 14;
-    var sea = C.CITY_H + C.BEACH_H - 40;
-    if (car.x < minX) { car.x = minX; car.speed *= 0.4; }
-    if (car.x > maxX) { car.x = maxX; car.speed *= 0.4; }
-    if (car.y < 14) { car.y = 14; car.speed *= 0.4; }
-    if (car.y > sea) { car.y = sea; car.speed *= 0.4; }
+    // steering only bites while rolling, and reverses when going backwards
+    var dirSign = along < -1 ? -1 : 1;
+    var grip = controls.handbrake ? 1.4 : T.carGrip;
+    var turnSpeed = (Math.abs(along) / maxSpeed) * T.carSteerRate * m.handling * dirSign;
+    this.angle += this.steer * turnSpeed * dt;
 
-    if (car.wobble > 0) car.wobble = Math.max(0, car.wobble - dt * 2.4);
-    if (car.health < 40) {
-      car.smoke += dt;
-      if (car.smoke > 0.12) {
-        car.smoke = 0;
-        world.effects.puff(car.x - Math.cos(car.angle) * car.len * 0.4, car.y - Math.sin(car.angle) * car.len * 0.4);
+    // velocity is rebuilt as: mostly along the new heading, some sideways slip retained
+    var nfx = Math.cos(this.angle), nfy = Math.sin(this.angle);
+    var slipX = this.vx - nfx * (this.vx * nfx + this.vy * nfy);
+    var slipY = this.vy - nfy * (this.vx * nfx + this.vy * nfy);
+    var slipKeep = controls.handbrake ? 0.94 : Math.max(0, 1 - grip * dt * 0.55);
+    this.vx = nfx * along + slipX * slipKeep;
+    this.vy = nfy * along + slipY * slipKeep;
+
+    var nx = this.x + this.vx * dt;
+    var ny = this.y + this.vy * dt;
+
+    // keep the car out of buildings: split the push so it slides along the wall
+    var hit = city.hitBuilding(nx, ny, this.radius * 0.8);
+    if (hit) {
+      var before = Math.hypot(this.vx, this.vy);
+      var fixed = city.resolveCircle(nx, ny, this.radius * 0.8);
+      nx = fixed.x;
+      ny = fixed.y;
+      var after = Math.hypot(this.vx, this.vy);
+      if (before > 120) {
+        this.damage(before * 0.055);
+        this.vx *= 0.35;
+        this.vy *= 0.35;
+        this.dent = Math.min(1, this.dent + before * 0.0012);
+      }
+      if (after > 0) {
+        // scrub the velocity into the resolve direction
+        var used = Math.hypot(nx - this.x, ny - this.y) / Math.max(0.0001, dt);
+        var scale = Math.min(1, used / Math.max(1, before));
+        this.vx *= scale;
+        this.vy *= scale;
       }
     }
-  }
 
-  /* Coarse car-on-car separation so a pile-up is a shove, not a stack. */
-  function separateCars(cars, dt) {
-    for (var i = 0; i < cars.length; i++) {
-      for (var j = i + 1; j < cars.length; j++) {
-        var a = cars[i], b = cars[j];
-        var dx = b.x - a.x, dy = b.y - a.y;
-        var d2 = dx * dx + dy * dy;
-        var minD = (a.wid + b.wid) * 0.6 + 6;
-        if (d2 > minD * minD || d2 === 0) continue;
-        var d = Math.sqrt(d2);
-        var push = (minD - d) * 0.5;
-        var ux = dx / d, uy = dy / d;
-        a.x -= ux * push; a.y -= uy * push;
-        b.x += ux * push; b.y += uy * push;
-        var rel = Math.abs(a.speed - b.speed);
-        a.speed *= 0.82; b.speed *= 0.82;
-        if (rel > 120) { a.health -= rel * 0.05; b.health -= rel * 0.05; }
-      }
+    // the sea and the sand edge: a soft wall at the waterline
+    if (nx > CFG.WATER_X - 30) {
+      nx = CFG.WATER_X - 30;
+      this.vx = Math.min(0, this.vx) * 0.5;
     }
+    this.x = U.clamp(nx, 10, CFG.WORLD_W - 10);
+    this.y = U.clamp(ny, 10, CFG.WORLD_H - 10);
+    this.speed = Math.hypot(this.vx, this.vy);
+
+    // engine smoke when the car is nearly dead
+    if (this.health < this.maxHealth * 0.28 && this.speed > 0.5) {
+      this.smoke += dt;
+    }
+  };
+
+  Car.prototype.damage = function (amount) {
+    this.health = Math.max(0, this.health - amount);
+    return this.health <= 0;
+  };
+
+  Car.prototype.stop = function () {
+    this.vx = 0;
+    this.vy = 0;
+    this.speed = 0;
+    this.steer = 0;
+  };
+
+  // Bounding radius used for bullets and collisions with people.
+  Car.prototype.hitTest = function (x, y, pad) {
+    var dx = x - this.x, dy = y - this.y;
+    var c = Math.cos(-this.angle), s = Math.sin(-this.angle);
+    var lx = dx * c - dy * s;
+    var ly = dx * s + dy * c;
+    return Math.abs(lx) < this.len / 2 + (pad || 0) && Math.abs(ly) < this.wid / 2 + (pad || 0);
+  };
+
+  // ---- the car pool ----------------------------------------------------------
+  function CarManager(city, rng) {
+    this.city = city;
+    this.rng = rng;
+    this.list = [];
+    this.spawnClock = 0;
   }
 
-  /* The car nearest the player that is close enough to enter. */
-  function nearestEnterable(cars, x, y, range) {
-    var best = null, bestD = range * range;
-    for (var i = 0; i < cars.length; i++) {
-      var c = cars[i];
-      if (c.driver === 'player') continue;
-      if (c.health <= 0) continue;
-      var d2 = U.dist2(x, y, c.x, c.y);
-      if (d2 < bestD) { bestD = d2; best = c; }
+  CarManager.prototype.spawnParked = function (x, y, angle, modelIndex) {
+    var model = MODELS[modelIndex !== undefined ? modelIndex : Math.floor(this.rng() * MODELS.length)];
+    var car = new Car(x, y, angle, model, this.rng);
+    car.parked = true;
+    this.list.push(car);
+    return car;
+  };
+
+  // Fill every marked parking bay and line the kerbs with a few cars.
+  CarManager.prototype.seedParked = function () {
+    var rng = this.rng;
+    for (var k = 0; k < this.city.parkingSpaces.length; k++) {
+      var s = this.city.parkingSpaces[k];
+      if (rng() < 0.22) continue;
+      var car = this.spawnParked(s.x, s.y, s.angle);
+      s.taken = true;
+      s.car = car;
+    }
+    // kerbside cars on quiet blocks
+    for (var b = 0; b < this.city.blocks.length; b++) {
+      var bl = this.city.blocks[b];
+      if (rng() < 0.45) continue;
+      var edge = Math.floor(rng() * 4);
+      var x, y, ang;
+      var inset = 16;
+      if (edge === 0) { x = bl.x + 40 + rng() * (bl.w - 80); y = bl.y - inset; ang = 0; }
+      else if (edge === 1) { x = bl.x + bl.w + inset; y = bl.y + 40 + rng() * (bl.h - 80); ang = Math.PI / 2; }
+      else if (edge === 2) { x = bl.x + 40 + rng() * (bl.w - 80); y = bl.y + bl.h + inset; ang = 0; }
+      else { x = bl.x - inset; y = bl.y + 40 + rng() * (bl.h - 80); ang = Math.PI / 2; }
+      this.spawnParked(x, y, ang);
+    }
+  };
+
+  CarManager.prototype.nearest = function (x, y, maxDist, skipPlayer) {
+    var best = null, bd = maxDist * maxDist;
+    for (var k = 0; k < this.list.length; k++) {
+      var c = this.list[k];
+      if (skipPlayer && c.driver === 'player') continue;
+      if (this.city.hitBuilding(c.x, c.y, 4)) continue;
+      var d = U.dist2(c.x, c.y, x, y);
+      if (d < bd) { bd = d; best = c; }
     }
     return best;
-  }
-
-  /* ---------- drawing ---------- */
-
-  function drawCar(ctx, car, t) {
-    var L = car.len, W = car.wid;
-    ctx.save();
-    ctx.translate(car.x, car.y);
-    if (car.wobble > 0) ctx.rotate(Math.sin(t * 40) * car.wobble * 0.04);
-    ctx.rotate(car.angle);
-    // shadow
-    ctx.fillStyle = 'rgba(50,35,25,0.25)';
-    ctx.fillRect(-L / 2 + 4, -W / 2 + 5, L, W);
-    // body
-    ctx.fillStyle = car.paint;
-    U.roundRect(ctx, -L / 2, -W / 2, L, W, W * 0.32);
-    ctx.fill();
-    if (car.driver === 'player') {
-      ctx.strokeStyle = 'rgba(255,244,214,0.9)';
-      ctx.lineWidth = 2;
-      U.roundRect(ctx, -L / 2 - 1.5, -W / 2 - 1.5, L + 3, W + 3, W * 0.34);
-      ctx.stroke();
-    }
-    // bonnet and boot shade
-    ctx.fillStyle = 'rgba(0,0,0,0.12)';
-    ctx.fillRect(-L / 2 + 4, -W / 2 + 2, L * 0.18, W - 4);
-    ctx.fillRect(L / 2 - L * 0.16, -W / 2 + 2, L * 0.16 - 4, W - 4);
-    // cabin / windscreen
-    ctx.fillStyle = car.glass;
-    U.roundRect(ctx, -L * 0.16, -W * 0.36, L * 0.4, W * 0.72, 5);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.22)';
-    ctx.fillRect(-L * 0.14, -W * 0.3, L * 0.08, W * 0.6);
-    // roof highlight
-    ctx.fillStyle = 'rgba(255,255,255,0.14)';
-    ctx.fillRect(-L * 0.2, -W * 0.18, L * 0.36, W * 0.1);
-    // headlights
-    ctx.fillStyle = car.brake ? '#ff6b5a' : '#fff3cf';
-    ctx.fillRect(L / 2 - 3, -W / 2 + 3, 3, 5);
-    ctx.fillRect(L / 2 - 3, W / 2 - 8, 3, 5);
-    ctx.fillStyle = '#c8453c';
-    ctx.fillRect(-L / 2, -W / 2 + 3, 2.5, 4);
-    ctx.fillRect(-L / 2, W / 2 - 7, 2.5, 4);
-    // wheels
-    ctx.fillStyle = '#1c1c1f';
-    ctx.fillRect(L * 0.28, -W / 2 - 1, 7, 3);
-    ctx.fillRect(L * 0.28, W / 2 - 2, 7, 3);
-    ctx.fillRect(-L * 0.36, -W / 2 - 1, 7, 3);
-    ctx.fillRect(-L * 0.36, W / 2 - 2, 7, 3);
-
-    if (car.police) drawPoliceLivery(ctx, car, L, W, t);
-    if (car.health <= 0) {
-      ctx.fillStyle = 'rgba(30,20,15,0.5)';
-      U.roundRect(ctx, -L / 2, -W / 2, L, W, W * 0.32);
-      ctx.fill();
-    }
-    ctx.restore();
-  }
-
-  function drawPoliceLivery(ctx, car, L, W, t) {
-    ctx.fillStyle = '#f2f0e8';
-    ctx.fillRect(-L / 2 + 3, -W / 2 + 3, L * 0.3, W - 6);
-    ctx.fillStyle = '#1c2b45';
-    ctx.fillRect(-L / 2 + 3, -1.8, L - 6, 3.6);
-    // light bar
-    var flash = Math.sin(t * 14 + car.id) > 0;
-    ctx.fillStyle = flash ? '#ff3b3b' : '#3b7bff';
-    ctx.fillRect(-L * 0.06, -W / 2 + 2, 8, W / 2 - 3);
-    ctx.fillStyle = flash ? '#3b7bff' : '#ff3b3b';
-    ctx.fillRect(-L * 0.06, 1, 8, W / 2 - 3);
-    ctx.fillStyle = 'rgba(255,255,255,0.2)';
-    ctx.beginPath(); ctx.arc(-L * 0.06 + 4, flash ? -W * 0.25 : W * 0.25, 7, 0, 6.283); ctx.fill();
-  }
-
-  PC.vehicles = {
-    makeCar: makeCar,
-    updateCar: updateCar,
-    applyDrive: applyDrive,
-    separateCars: separateCars,
-    nearestEnterable: nearestEnterable,
-    drawCar: drawCar,
-    TYPES: BODY_TYPES,
-    PAINT: PAINT
   };
-})(window.PC = window.PC || {});
+
+  CarManager.prototype.updateDrivers = function (dt, world) {
+    // every car that is not the player still needs physics so the street looks alive
+    for (var k = 0; k < this.list.length; k++) {
+      var c = this.list[k];
+      if (c.driver === 'player') continue;
+      if (c.driver === 'traffic' || c.driver === 'police') continue; // handled by their managers
+      if (c.speed > 0.4 || c.vx || c.vy) {
+        c.drive(dt, {}, this.city);
+      }
+      c.occupied = false;
+    }
+  };
+
+  Car.models = MODELS;
+  PC.Car = Car;
+  PC.CarManager = CarManager;
+  PC.CAR_MODELS = MODELS;
+})();
