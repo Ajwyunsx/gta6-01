@@ -1,112 +1,91 @@
-// input.js — keyboard, mouse and pointer lock, plus a deterministic replay mode the shot
-// scenes use. Everything downstream reads the flat `state` object; nothing reads events.
-(function () {
+// Palm City — keyboard and mouse, read once per step into a small plain object. The rest
+// of the game never listens for events itself.
+(function (global) {
   'use strict';
-  var PC = window.PC;
 
-  function Input(canvas) {
-    this.canvas = canvas;
-    this.state = {
-      up: false, down: false, left: false, right: false,
-      sprint: false, aim: false, fire: false, action: false,
-      handbrake: false, mouseX: 0, mouseY: 0, aimAngle: 0,
-      clicked: false, wheel: 0,
+  const PC = global.PC;
+
+  function makeInput(canvas) {
+    const keys = Object.create(null);
+    const input = {
+      keys,
+      mouse: { x: 0, y: 0, down: false, clicked: false },
+      wheel: 0,
+      pressed: Object.create(null),   // edge-triggered keys, cleared each step
+      anyKey: false,
     };
-    this.pressed = {};          // edge-triggered keys, cleared by the world each step
-    this.locked = false;
-    this.scripted = null;       // a function(dt, state) used by the shot scenes
-    this.bind();
-  }
 
-  Input.prototype.bind = function () {
-    var self = this;
-    var canvas = this.canvas;
-    var map = {
-      KeyW: 'up', ArrowUp: 'up',
-      KeyS: 'down', ArrowDown: 'down',
-      KeyA: 'left', ArrowLeft: 'left',
-      KeyD: 'right', ArrowRight: 'right',
-      ShiftLeft: 'sprint', ShiftRight: 'sprint',
-      Space: 'action',
-      KeyE: 'interact',
-      KeyF: 'fire',
-    };
-    window.addEventListener('keydown', function (e) {
-      if (map[e.code]) {
-        self.state[map[e.code]] = true;
-        if (e.code === 'Space') self.state.aim = false;
-      }
-      if (e.code === 'Space') e.preventDefault();
-      self.pressed[e.code] = true;
-      if (self.onKey) self.onKey(e.code, e);
-    });
-    window.addEventListener('keyup', function (e) {
-      if (map[e.code]) self.state[map[e.code]] = false;
-    });
-    window.addEventListener('blur', function () {
-      self.state.up = self.state.down = self.state.left = self.state.right = false;
-      self.state.fire = false;
-      self.state.action = false;
-      self.state.sprint = false;
+    const codeOf = (e) => e.code || e.key;
+
+    global.addEventListener('keydown', (e) => {
+      const code = codeOf(e);
+      if (!keys[code]) input.pressed[code] = true;
+      keys[code] = true;
+      input.anyKey = true;
+      // Stop the page scrolling under the game.
+      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(code)) e.preventDefault();
     });
 
-    canvas.addEventListener('mousemove', function (e) {
-      var rect = self.canvas.getBoundingClientRect();
-      self.state.mouseX = e.clientX - rect.left;
-      self.state.mouseY = e.clientY - rect.top;
-      self.state.aim = true;
-      if (self.locked) {
-        self.state.aimAngle += e.movementX * 0.0022;
+    global.addEventListener('keyup', (e) => {
+      keys[codeOf(e)] = false;
+    });
+
+    global.addEventListener('blur', () => {
+      for (const k of Object.keys(keys)) keys[k] = false;
+      input.mouse.down = false;
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      input.mouse.x = ((e.clientX - rect.left) / rect.width) * canvas.width;
+      input.mouse.y = ((e.clientY - rect.top) / rect.height) * canvas.height;
+    });
+
+    canvas.addEventListener('mousedown', (e) => {
+      if (e.button === 0) {
+        input.mouse.down = true;
+        input.mouse.clicked = true;
       }
     });
-    canvas.addEventListener('mousedown', function (e) {
-      self.state.fire = true;
-      self.state.clicked = true;
-      self.state.aim = true;
-      if (self.onClick) self.onClick(e);
+
+    global.addEventListener('mouseup', (e) => {
+      if (e.button === 0) input.mouse.down = false;
     });
-    window.addEventListener('mouseup', function () {
-      self.state.fire = false;
-    });
-    canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
-    canvas.addEventListener('wheel', function (e) {
-      self.state.wheel += Math.sign(e.deltaY);
+
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    canvas.addEventListener('wheel', (e) => {
+      input.wheel += Math.sign(e.deltaY);
       e.preventDefault();
     }, { passive: false });
 
-    canvas.addEventListener('click', function () {
-      if (!self.locked && canvas.requestPointerLock) {
-        try { canvas.requestPointerLock(); } catch (err) { void err; }
+    input.endStep = function endStep() {
+      for (const k of Object.keys(input.pressed)) delete input.pressed[k];
+      input.mouse.clicked = false;
+      input.wheel = 0;
+      input.anyKey = false;
+    };
+
+    input.axis = function axis() {
+      let x = 0;
+      let y = 0;
+      if (keys.KeyA || keys.ArrowLeft) x -= 1;
+      if (keys.KeyD || keys.ArrowRight) x += 1;
+      if (keys.KeyW || keys.ArrowUp) y -= 1;
+      if (keys.KeyS || keys.ArrowDown) y += 1;
+      return { x, y };
+    };
+
+    input.consumeKey = function consumeKey(code) {
+      if (input.pressed[code]) {
+        delete input.pressed[code];
+        return true;
       }
-    });
-    document.addEventListener('pointerlockchange', function () {
-      self.locked = document.pointerLockElement === canvas;
-    });
-  };
+      return false;
+    };
 
-  // Convert a mouse position to an aim angle from the screen centre.
-  Input.prototype.mouseAngle = function (w, h, fallback) {
-    var dx = this.state.mouseX - w / 2;
-    var dy = this.state.mouseY - h / 2;
-    if (Math.abs(dx) + Math.abs(dy) < 6) return fallback;
-    return Math.atan2(dy, dx);
-  };
+    return input;
+  }
 
-  Input.prototype.consume = function () {
-    this.pressed = {};
-    this.state.clicked = false;
-    this.state.wheel = 0;
-  };
-
-  Input.prototype.applyScript = function (dt) {
-    if (this.scripted) this.scripted(dt, this.state);
-  };
-
-  // A helper for shot scenes: press keys between times.
-  Input.scriptPress = function (state, from, to, keys) {
-    for (var k = 0; k < keys.length; k++) state[keys[k]] = true;
-    void from; void to;
-  };
-
-  PC.Input = Input;
-})();
+  PC.Input = { makeInput };
+})(window);
