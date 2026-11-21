@@ -1,217 +1,224 @@
-// shots.js — deterministic scene staging for the screenshots. ?shot=1..4 drops the game
-// into a fixed, hand-composed moment (a different one per index) so the captures are
-// repeatable: no waiting for random traffic to line up.
+/* Palm City — screenshot staging. ?shot=1..4&seed=N builds the world, fast-forwards it into the
+   scene the shot wants (in car on a boulevard, on foot at the café, a wanted chase, a job
+   briefing) and paints it twice, then sets window.__shotReady. The staging runs the same
+   simulation the game runs, so what the camera sees is real play, not a painted mock-up. */
+(function (PC) {
+  'use strict';
 
-import { ROAD_X, ROAD_Y, WORLD } from './config.js';
-import { makeCar, Ped } from './entities.js';
-import { safePoint } from './city.js';
+  var C = PC.CONFIG, U = PC.util;
 
-export function applyShot(world, index) {
-  const p = world.player;
-  const city = world.city;
-  const n = Number(index) || 1;
+  function stage(name, env) {
+    var index = Number.parseInt(name, 10) || 1;
+    var input = PC.input.create(env.canvas);
+    var audio = PC.audio.make();
+    var world = PC.world.create(env.seed, input, audio);
+    var state = { screen: PC.ui.SCREEN_TITLE, world: world, renderer: env.renderer, input: input, audio: audio, time: 0 };
 
-  if (n === 1) {
-    // Cover: on the coastal avenue heading north, sand and palms to the right, the
-    // beachfront blocks to the left, traffic and a cruiser behind, HUD and minimap live.
-    const avenue = ROAD_X[4];
-    const car = makeCar({
-      x: avenue + 30,
-      y: 1560,
-      angle: -Math.PI / 2,
-      color: '#ff4f8f',
-      kind: 'sport',
-      driver: 'player',
-      w: 44,
-      h: 88,
-    });
-    // Caught at cruising speed: a still of a parked car reads as a parked car.
-    car.speed = 330;
-    car.vx = Math.cos(car.angle) * 330;
-    car.vy = Math.sin(car.angle) * 330;
-    car.stageAnchor = { x: car.x, y: car.y };
-    world.cars.push(car);
-    p.inCar = car;
-    p.x = car.x;
-    p.y = car.y;
-    p.money = 1480;
-    p.health = 88;
-    p.armor = 55;
-    p.heat = 40;
-    world.police.addHeat(p, 0);
-    p.stars = 2;
-    world.missionManager.start(2);
-    world.missionManager.state = 'active';
-    world.missionManager.setStep(0);
-    // Objective line only — the briefing box would eat half the frame in a still.
-    world.missionManager.dialogueIndex = world.missionManager.dialogue.length;
-    world.combat.addPickup(avenue + 112, 1466, 'cash', 60);
-    // The hero is pinned at its mark; staged cars keep their own speed, so they're placed
-    // where they'll be ~1.15 s after load rather than where they start. Both lanes carry
-    // traffic: the avenue should read as a street in use, not a runway.
-    addShotCars(world, [
-      // Placed where the shutter sees them, and held there: a car given a velocity for
-      // 1.15 s of load grace ends up half a block from where the shot was composed.
-      [avenue + 30, 1392, -Math.PI / 2, '#8a7bd8'],
-      [avenue - 30, 1478, Math.PI / 2, '#4f9fb8'],
-      [avenue - 30, 1732, Math.PI / 2, '#d8b25f'],
-      [avenue + 30, 1770, -Math.PI / 2, '#7ec8a0'],
-    ]);
-    for (const c of world.cars) {
-      if (!c.staged) continue;
-      c.vx = 0;
-      c.vy = 0;
-      c.stageHold = true;
+    if (index === 1) sceneCover(world);
+    else if (index === 2) sceneOnFoot(world);
+    else if (index === 3) scenePolice(world);
+    else sceneMission(world);
+
+    // simulate a little so traffic, peds and particles are in motion, then paint
+    for (var i = 0; i < 40; i++) PC.world.step(world, C.STEP);
+    settleCamera(world);
+
+    var painted = 0;
+    function paint() {
+      PC.render.draw(env.renderer, world, 2.2);
+      if (index === 4) PC.ui.drawMissionCard(env.renderer.ctx, world, 2.2);
+      else PC.ui.drawToast(env.renderer.ctx, world, 2.2);
+      painted += 1;
+      if (painted < 2) requestAnimationFrame(paint);
+      else window.__shotReady = true;
     }
-    addShotPeds(world, [
-      [avenue + 96, 1620], [avenue + 120, 1440], [avenue - 98, 1600], [avenue + 92, 1360],
-    ]);
-    // Ambient traffic keeps spawning on its own schedule and was parking itself on top
-    // of the hero. Keep only the staged cars and the hero inside the frame.
-    world.cars = world.cars.filter((c) => c === car || c.staged);
-    world.traffic.cars = world.cars.filter((c) => c.driver === 'traffic');
-    world.traffic.target = 0;
-    // No tutorial hint on the cover: it lands dead centre and cuts the hero car in half.
-    world.hint = '';
-    // Two stars on the HUD, but no cruisers in shot: a patrol car drifting in from the top
-    // left kept parking itself under the health bar.
-    world.police.cars.length = 0;
-    world.police.stage = true;
-    return { offset: { x: 0, y: -124 }, zoom: 1.26, stageSpeed: 330, lockCamera: true };
+    requestAnimationFrame(paint);
+    window.__palmCity = { state: state, world: world };
   }
 
-  if (n === 2) {
-    // On foot: the sidewalk in front of the Coral Room, the delivery marker glowing over
-    // the door, pedestrians about, cash on the ground. The whole first job in one frame.
-    const door = { x: ROAD_X[1] + 360, y: ROAD_Y[1] - 250 };
-    const stand = safePoint(city, door.x - 14, door.y + 104);
-    p.x = stand.x;
-    p.y = stand.y;
-    p.heading = -Math.PI / 2;
-    p.aim = -Math.PI / 2 + 0.16;
-    p.money = 620;
-    p.health = 100;
-    p.armor = 30;
-    p.stars = 0;
-    world.missionManager.start(0);
-    world.missionManager.state = 'active';
-    world.missionManager.setStep(1);
-    world.combat.addPickup(p.x + 168, p.y - 34, 'cash', 120);
-    world.combat.addPickup(p.x - 150, p.y - 90, 'health', 35);
-    addShotPeds(world, [
-      [p.x + 96, p.y - 96], [p.x - 74, p.y - 40], [p.x + 168, p.y + 70],
-      [p.x - 186, p.y - 150], [p.x + 64, p.y - 230],
-    ]);
-    // Nothing parked in the hero's lap: a sedan below them draws later in the painter's
-    // order (higher y) and used to cover the one figure the shot is about.
-    addShotCars(world, [
-      [p.x + 250, p.y + 96, 0, '#4f9fb8'],
-      [p.x - 268, p.y + 96, 0, '#c8556f'],
-      [p.x + 470, p.y + 96, 0, '#8a7bd8'],
-    ]);
-    world.hint = 'WASD to walk  ·  SHIFT to sprint  ·  click to fire';
-    return { offset: { x: -4, y: -34 }, zoom: 1.8, lockCamera: true };
+  function settleCamera(world) {
+    var cam = world.camera;
+    var pl = world.player;
+    var tx = pl.x, ty = pl.y;
+    if (pl.inCar) {
+      tx += Math.cos(pl.inCar.angle) * Math.min(150, pl.inCar.speed * 0.42);
+      ty += Math.sin(pl.inCar.angle) * Math.min(150, pl.inCar.speed * 0.42);
+    } else {
+      tx += Math.cos(pl.angle) * 40;
+      ty += Math.sin(pl.angle) * 40;
+    }
+    var z = cam.targetZoom, vw = C.VW / z, vh = C.VH / z;
+    cam.zoom = z;
+    cam.x = U.clamp(tx - vw / 2, 0, Math.max(0, C.CITY_W - vw));
+    cam.y = U.clamp(ty - vh / 2, 0, Math.max(0, C.CITY_H + C.BEACH_H - vh));
   }
 
-  if (n === 3) {
-    // Police chase: player in a car with four cruisers closing in, stars at 4.
-    const car = makeCar({
-      x: ROAD_X[2] + 30,
-      y: ROAD_Y[1] + 150,
-      angle: Math.PI / 2,
-      color: '#c9a227',
-      kind: 'sport',
-      driver: 'player',
-      w: 44,
-      h: 88,
-    });
-    world.cars.push(car);
-    p.inCar = car;
-    p.x = car.x;
-    p.y = car.y;
-    // Rolling, so the chase reads as a chase rather than a stakeout.
-    car.vx = Math.cos(car.angle) * 250;
-    car.vy = Math.sin(car.angle) * 250;
-    car.speed = 250;
-    p.money = 2350;
-    p.health = 62;
-    p.armor = 20;
-    p.heat = 70;
-    world.police.addHeat(p, 0);
-    p.stars = 4;
-    // Frame the chase: the road ahead, the hero car low in the frame, and five cruisers
-    // stacked up the lane behind it. police.stage holds the formation so the composition
-    // survives the car rolling forward.
-    world.police.stage = true;
-    const slot = [
-      [-104, -48], [104, -60], [-48, -104], [-152, -128], [132, -120],
+  /* 1 — the cover: at the wheel on a downtown boulevard, traffic ahead, the HUD and minimap live. */
+  function sceneCover(world) {
+    var pl = world.player;
+    // put the player in a red coupe on the central avenue heading north
+    var avenue = C.CELL * 8;
+    var car = PC.vehicles.makeCar(avenue + C.LANE, C.CELL * 12, -Math.PI / 2, { rng: world.rng, type: 'coupe', paint: '#d94f4f' });
+    car.driver = 'player';
+    car.speed = 210;
+    world.parked.push(car);
+    pl.inCar = car;
+    pl.x = car.x; pl.y = car.y;
+    world.camera.targetZoom = 0.86;
+    world.camera.zoom = 0.86;
+    world.money = 1840;
+    pl.health = 92; pl.armor = 64;
+    world.missions.index = 3;
+    world.missions.state = 'active';
+    world.missions.job = PC.missions.JOBS[3];
+    world.missions.step = 1;
+    world.missions.targets = [
+      { at: 'pickup', x: PC.missions.SPOTS.marina.x, y: PC.missions.SPOTS.marina.y, label: 'White coupe', kind: 'steal' },
+      { at: 'drop', x: PC.missions.SPOTS.garage.x, y: PC.missions.SPOTS.garage.y, label: 'Garage', kind: 'drop' }
     ];
-    for (let i = 0; i < slot.length; i++) {
-      const cop = world.police.spawnCop({ player: { x: car.x, y: car.y + slot[i][1], heading: Math.PI / 2 } });
-      if (!cop) break;
-      cop.x = car.x + slot[i][0];
-      cop.y = car.y + slot[i][1];
-      cop.angle = Math.PI / 2;
-      cop.stageOffset = slot[i];
-      cop.vx = 0;
-      cop.vy = 260;
+    world.hud.flash('Wheels for the Job', '#ff6f7d');
+    world.hud.flashTimer = 2.2;
+    seedTrafficAround(world, avenue, C.CELL * 11.4, 6);
+    // a few parked cars along the avenue so the street is dressed
+    for (var i = 0; i < 5; i++) {
+      var pc = PC.vehicles.makeCar(avenue - C.LANE * 2.4, C.CELL * (9.2 + i * 1.05), -Math.PI / 2, { rng: world.rng, parked: true });
+      pc.occupied = i % 2 === 0;
+      world.parked.push(pc);
     }
-    world.missionManager.start(4);
-    world.missionManager.state = 'active';
-    // The escape step, so the objective line reads like a chase rather than an errand.
-    world.missionManager.setStep(2);
-    world.missionManager.dialogueIndex = world.missionManager.dialogue.length;
-    // Clear the lane around the player so the staged frame stays at speed instead of
-    // braking for traffic, and so the cruisers read clearly.
-    // Clear the corridor: traffic and parked cars in the lane would brake the hero car
-    // mid-capture, and their headlights read as more cops. Nothing new spawns either,
-    // so the frame stays the frame.
-    world.cars = world.cars.filter((c) => c === car || c.driver === 'cop'
-      || Math.abs(c.x - car.x) > 150 || c.y < car.y - 480 || c.y > car.y + 260);
-    world.traffic.cars = world.cars.filter((c) => c.driver === 'traffic');
-    world.traffic.target = 0;
-    world.hint = 'WASD — drive  ·  SPACE — handbrake  ·  E — bail out';
-    // Player a little below centre, the cruisers stacked up the frame above them, and
-    // enough city either side that the shot reads as a street rather than a corridor.
-    return { offset: { x: 0, y: 24 }, zoom: 1.5, autoThrottle: 0.55, lockCamera: true };
+    world.hud.flashTimer = 0;
+    world.hud.flashText = '';
   }
 
-  // 4 — mission briefing over the street.
-  world.missionManager.start(5);
-  world.missionManager.state = 'brief';
-  const s = safePoint(city, ROAD_X[3] - 140, ROAD_Y[0] + 280);
-  p.x = s.x;
-  p.y = s.y;
-  p.money = 3400;
-  p.health = 92;
-  p.armor = 60;
-  p.stars = 0;
-  // main.js honours this so the capture lands on the briefing card itself: the moment
-  // every job actually begins, with the payout and the objective list on screen.
-  return { offset: { x: 0, y: 0 }, zoom: 1.0, lockCamera: true, state: 'brief' };
-}
-
-function addShotCars(world, list) {
-  for (const [x, y, angle, color] of list) {
-    const car = makeCar({ x, y, angle, color, kind: 'sedan', driver: 'traffic' });
-    // The route has to run the way the car is pointing: a northbound car given a
-    // southbound target just U-turns on the spot and ends up diagonal across the lane.
-    const tx = x + Math.cos(angle) * 600;
-    const ty = y + Math.sin(angle) * 600;
-    car.traffic = { lane: 1, dirX: 0, dirY: 0, nodeIndex: 0, route: [{ x, y: ty }], target: { x: tx, y: ty } };
-    car.vx = Math.cos(angle) * 160;
-    car.vy = Math.sin(angle) * 160;
-    car.staged = true;
-    world.cars.push(car);
+  /* 2 — on foot at the boardwalk café, peds and palms, objective marker in the near distance. */
+  function sceneOnFoot(world) {
+    var pl = world.player;
+    var s = PC.missions.SPOTS.cafe;
+    pl.x = s.x + 96; pl.y = s.y + 34;
+    pl.angle = -0.5;
+    pl.health = 84; pl.armor = 30;
+    world.money = 1240;
+    world.missions.index = 1;
+    world.missions.state = 'active';
+    world.missions.job = PC.missions.JOBS[1];
+    world.missions.step = 0;
+    world.missions.targets = [
+      { at: 'm1', x: PC.missions.SPOTS.pawn.x, y: PC.missions.SPOTS.pawn.y, label: 'Pawnbroker', kind: 'pickup' },
+      { at: 'drop', x: s.x, y: s.y, label: 'Vera', kind: 'drop' }
+    ];
+    // people on the promenade and a car idling at the curb
+    for (var i = 0; i < 7; i++) {
+      var ped = PC.entities.spawnPed(world.city, world.rng, s.x - 60 + i * 34, s.y + 6 + (i % 3) * 22);
+      ped.angle = i % 2 ? 0.2 : Math.PI - 0.2;
+      ped.walk = i;
+      world.peds.push(ped);
+    }
+    var parked = PC.vehicles.makeCar(s.x - 150, s.y + 62, 0, { rng: world.rng, type: 'van', paint: '#4b9fd4', parked: true });
+    parked.occupied = true;
+    world.parked.push(parked);
+    var parked2 = PC.vehicles.makeCar(s.x + 210, s.y + 62, Math.PI, { rng: world.rng, type: 'pickup', paint: '#e8a13a', parked: true });
+    world.parked.push(parked2);
+    pl.weapon = 'pistol';
+    pl.ammo = 12;
+    // aim the reticle at something interesting
+    world.input.mouse.active = true;
+    world.input.mouse.x = 880; world.input.mouse.y = 300;
+    world.input.mouse.wx = pl.x + 140;
+    world.input.mouse.wy = pl.y - 30;
+    world.camera.targetZoom = 1;
+    world.hud.flash('Collect from the pawnbroker', '#ff6f7d');
+    world.hud.flashTimer = 0;
   }
-}
 
-function addShotPeds(world, list) {
-  for (const [x, y] of list) {
-    const ped = new Ped(x, y, { float: (a, b) => (a + b) / 2, pick: (l) => l[0] });
-    ped.heading = Math.random() * Math.PI * 2;
-    ped.target = ped.heading;
-    ped.moving = true;
-    world.peds.push(ped);
+  /* 3 — wanted: three stars, cruisers closing, sirens, smoke from a wreck. */
+  function scenePolice(world) {
+    var pl = world.player;
+    var avenue = C.CELL * 9;
+    var car = PC.vehicles.makeCar(avenue + C.LANE * 0.6, C.CELL * 10.2, -Math.PI / 2, { rng: world.rng, type: 'sedan', paint: '#3f8f8a' });
+    car.driver = 'player';
+    car.speed = 260;
+    car.health = 62;
+    world.parked.push(car);
+    pl.inCar = car;
+    pl.x = car.x; pl.y = car.y;
+    pl.health = 68; pl.armor = 40;
+    world.money = 2960;
+    world.heat.stars = 3;
+    world.heat.decay = 6;
+    world.camera.targetZoom = 0.84;
+    world.camera.zoom = 0.84;
+
+    // three cruisers behind and beside, nose-in on the chase
+    var c1 = PC.vehicles.makeCar(car.x - 30, car.y + 150, -Math.PI / 2 + 0.08, { rng: world.rng, police: true, paint: '#f2f0e8', type: 'sedan' });
+    c1.speed = 250; c1.occupied = true;
+    var c2 = PC.vehicles.makeCar(car.x + 96, car.y + 240, -Math.PI / 2 - 0.16, { rng: world.rng, police: true, paint: '#f2f0e8', type: 'sedan' });
+    c2.speed = 235; c2.occupied = true;
+    var c3 = PC.vehicles.makeCar(car.x - 110, car.y + 340, -Math.PI / 2 + 0.22, { rng: world.rng, police: true, paint: '#f2f0e8', type: 'coupe' });
+    c3.speed = 244; c3.occupied = true;
+    world.heat.cops.push(c1, c2, c3);
+
+    // a burning civilian car ahead, smoke rising
+    var wreck = PC.vehicles.makeCar(car.x + 210, car.y - 90, 0.4, { rng: world.rng, type: 'van', paint: '#a2583d' });
+    wreck.health = 0;
+    world.parked.push(wreck);
+    for (var s = 0; s < 6; s++) world.effects.smoke(wreck.x, wreck.y, 3);
+    world.effects.explode(wreck.x, wreck.y);
+    world.hud.flash('Wanted: 3 stars', '#e0402f');
+    world.hud.flashTimer = 0;
+
+    world.missions.index = 4;
+    world.missions.state = 'active';
+    world.missions.job = PC.missions.JOBS[4];
+    world.missions.step = 0;
+    world.missions.targets = [
+      { at: 'pickup', x: PC.missions.SPOTS.cafe.x + 30, y: PC.missions.SPOTS.cafe.y - 30, label: 'Clear', kind: 'escape' },
+      { at: 'drop', x: PC.missions.SPOTS.pier.x, y: PC.missions.SPOTS.pier.y, label: 'Pier head', kind: 'drop' }
+    ];
+    world.audio.siren(true);
+    seedTrafficAround(world, avenue - C.LANE * 3.2, C.CELL * 9.2, 3);
   }
-}
+
+  /* 4 — the briefing: job card over the city, the marker and a car waiting. */
+  function sceneMission(world) {
+    var pl = world.player;
+    var s = PC.missions.SPOTS.cafe;
+    pl.x = s.x + 60; pl.y = s.y + 20;
+    pl.angle = -1.2;
+    pl.health = 100; pl.armor = 72;
+    world.money = 3420;
+    world.missions.index = 5;
+    world.missions.job = PC.missions.JOBS[5];
+    world.missions.state = 'brief';
+    world.missions.briefTime = 3.4;
+    world.missions.step = 0;
+    world.missions.targets = [
+      { at: 'pickup', x: PC.missions.SPOTS.bank.x, y: PC.missions.SPOTS.bank.y, label: 'Office', kind: 'pickup' },
+      { at: 'crack', x: PC.missions.SPOTS.bank.x + 26, y: PC.missions.SPOTS.bank.y + 20, label: 'Safe', kind: 'crack' },
+      { at: 'drop', x: s.x, y: s.y, label: 'Café', kind: 'drop' }
+    ];
+    // a getaway coupe at the curb
+    var coupe = PC.vehicles.makeCar(s.x + 150, s.y + 58, Math.PI, { rng: world.rng, type: 'coupe', paint: '#2f3b4a', parked: true });
+    coupe.occupied = false;
+    world.parked.push(coupe);
+    for (var i = 0; i < 5; i++) {
+      var ped = PC.entities.spawnPed(world.city, world.rng, s.x - 40 + i * 40, s.y + 2 + (i % 2) * 26);
+      world.peds.push(ped);
+    }
+    world.camera.targetZoom = 1;
+    world.hud.flash('The Check Cashing Job', '#f2c14e');
+    world.hud.flashTimer = 0;
+  }
+
+  function seedTrafficAround(world, x, y, n) {
+    for (var i = 0; i < n; i++) {
+      var car = PC.vehicles.makeCar(x + (world.rng() - 0.5) * 60, y - i * 96, -Math.PI / 2, { rng: world.rng });
+      car.traffic = true;
+      car.axis = 'y'; car.dir = -1;
+      car.gx = Math.round(x / C.CELL); car.gy = Math.round((y - i * 96) / C.CELL);
+      car.cruise = 120 + world.rng() * 20;
+      car.speed = 120;
+      world.traffic.push(car);
+    }
+  }
+
+  PC.shots = { stage: stage };
+})(window.PC = window.PC || {});
