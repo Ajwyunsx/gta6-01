@@ -1,151 +1,278 @@
-// main.js — boots the game: one canvas, one renderer, one world, a fixed-step loop with an
-// accumulator so the simulation never depends on the monitor's refresh, and the wiring for
-// the keyboard, the mouse and the pause menu. Also reads ?shot=N to stage a deterministic
-// scene for the screenshot pass (shots.js).
-(function () {
+// Palm City — the loop: a canvas, a fixed step, and the mode machine that moves between
+// the title, the briefing, play, pause, busted and wasted. Also where saving happens.
+(function (global) {
   'use strict';
-  var PC = window.PC;
-  var CFG = PC.CFG;
 
-  var canvas = document.getElementById('game');
-  var renderer = new PC.Renderer(canvas);
-  var world = new PC.World(canvas);
-  world.renderer = renderer;
-  var input = new PC.Input(canvas);
+  const PC = global.PC;
 
-  document.title = 'Palm City';
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d', { alpha: false });
+  let W = 1280;
+  let H = 720;
 
-  // Any key press or click unlocks the audio context (browser autoplay policy).
-  function unlockAudio() {
-    world.audio.start();
-    world.audio.resume();
-    window.removeEventListener('keydown', unlockAudio);
-    window.removeEventListener('pointerdown', unlockAudio);
+  function resize() {
+    const dpr = Math.min(2, global.devicePixelRatio || 1);
+    const rect = canvas.getBoundingClientRect();
+    W = Math.max(960, Math.round(rect.width));
+    H = Math.max(540, Math.round(rect.height));
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
-  window.addEventListener('keydown', unlockAudio);
-  window.addEventListener('pointerdown', unlockAudio);
 
-  input.onKey = function (code) {
-    if (world.ui.key(code)) {
-      world.audio.uiClick();
+  const input = PC.Input.makeInput(canvas);
+  const audio = PC.Audio.makeAudio();
+
+  let state = PC.World.create(20261121);
+  state.camera.w = W;
+  state.camera.h = H;
+
+  let menuSel = 0;
+  let fade = 0;
+  let briefingJob = null;
+
+  const params = new URLSearchParams(location.search);
+  const shotMode = params.has('shot');
+  const shotFrames = Number(params.get('frames') || 0);
+
+  /** Start a fresh game from the title, from a save, or fresh. */
+  function startGame(fromSave) {
+    const seed = fromSave && fromSave.seed ? fromSave.seed : 20261121;
+    state = PC.World.create(seed);
+    state.camera.w = W;
+    state.camera.h = H;
+
+    if (fromSave) {
+      const p = state.player;
+      p.cash = fromSave.cash ?? 0;
+      p.health = fromSave.health ?? p.maxHealth;
+      p.armour = fromSave.armour ?? 0;
+      p.ammo = fromSave.ammo ?? 120;
+      p.x = fromSave.x ?? p.x;
+      p.y = fromSave.y ?? p.y;
+      state.missions.index = Math.min(fromSave.jobIndex ?? 0, state.missions.jobs.length - 1);
+      state.missions.story.completed = fromSave.completed ?? [];
+      state.wanted.heat = fromSave.heat ?? 0;
+      state.camera.x = p.x;
+      state.camera.y = p.y;
+    }
+
+    state.mode = 'playing';
+    // Offer the current job.
+    const job = PC.Missions.current(state.missions);
+    briefingJob = job;
+    state.mode = 'briefing';
+    audio.start();
+  }
+
+  function acceptBriefing() {
+    state.mode = 'playing';
+    PC.Missions.begin(state.missions, state.city);
+    briefingJob = null;
+  }
+
+  function quitToTitle() {
+    PC.World.respawn(state, true);
+    state.mode = 'title';
+    briefingJob = null;
+    audio.engineLevel(0, false);
+    audio.sirenLevel(0);
+  }
+
+  // ---- per-step input for the menus --------------------------------------
+
+  function stepMenus() {
+    if (state.mode === 'title') {
+      if (input.consumeKey('Enter') || input.consumeKey('NumpadEnter')) {
+        startGame(null);
+      } else if (input.consumeKey('KeyL') && PC.UI.hasSave()) {
+        const s = PC.UI.loadGame();
+        if (s) startGame(s);
+      }
       return;
     }
-    // in-game shortcuts
-    if (world.ui.screen !== 'playing') return;
-    if (code === 'KeyE') input.state.interact = true;
-    if (code === 'KeyM') world.hud.toast('Music ' + (world.audio.toggleMusic() ? 'on' : 'off'));
-    if (code === 'KeyG') world.save() && world.hud.toast('Game saved');
-  };
 
-  window.addEventListener('resize', function () {
-    renderer.resize();
-  });
+    if (state.mode === 'briefing') {
+      if (input.consumeKey('Enter') || input.consumeKey('NumpadEnter')) acceptBriefing();
+      else if (input.consumeKey('Escape')) {
+        state.mode = 'playing';
+        briefingJob = null;
+        PC.UI.toast(state.toasts, 'Job declined — the marker stays', PC.PALETTE.hudDim);
+      }
+      return;
+    }
 
-  // ---- the shot mode ---------------------------------------------------------
-  var params = new URLSearchParams(window.location.search);
-  var shotParam = params.get('shot');
-  var shotFrames = Number(params.get('frames') || 90);
-  var scripted = null;
-  if (shotParam && window.PCShots) {
-    scripted = window.PCShots.setup(world, input, Number(shotParam));
-    if (scripted) {
-      // cinematics: the world is already in the right place; just run the clock
-      for (var warm = 0; warm < Math.min(shotFrames, 240); warm++) world.step(CFG.STEP, input);
-      renderer.draw(world);
-      window.__palmCityReady = true;
+    if (state.mode === 'paused') {
+      if (input.consumeKey('ArrowUp') || input.consumeKey('KeyW')) menuSel = (menuSel + 3) % 4;
+      if (input.consumeKey('ArrowDown') || input.consumeKey('KeyS')) menuSel = (menuSel + 1) % 4;
+      if (input.consumeKey('Escape')) {
+        state.mode = 'playing';
+        return;
+      }
+      if (input.consumeKey('Enter') || input.consumeKey('NumpadEnter')) {
+        if (menuSel === 0) state.mode = 'playing';
+        else if (menuSel === 1) {
+          if (PC.UI.saveGame(state)) PC.UI.toast(state.toasts, 'Game saved', '#9ce0a8');
+        } else if (menuSel === 2) {
+          const s = PC.UI.loadGame();
+          if (s) startGame(s);
+          else PC.UI.toast(state.toasts, 'No save found', PC.PALETTE.danger);
+        } else {
+          quitToTitle();
+        }
+        return;
+      }
+      return;
+    }
+
+    if (state.mode === 'busted' || state.mode === 'wasted') {
+      state.bustedTimer += PC.STEP;
+      state.wastedTimer += PC.STEP;
+      if (input.consumeKey('Enter') || input.consumeKey('NumpadEnter') || input.consumeKey('Space')) {
+        PC.World.respawn(state, true);
+      }
+      return;
     }
   }
 
-  // ---- fixed-step loop -------------------------------------------------------
-  var last = 0;
-  var acc = 0;
-  var running = true;
+  // ---- the frame ---------------------------------------------------------
+
+  let acc = 0;
+  let last = 0;
+  let frames = 0;
 
   function frame(now) {
-    if (!running) return;
-    requestAnimationFrame(frame);
     if (!last) last = now;
-    var delta = (now - last) / 1000;
+    let dt = (now - last) / 1000;
     last = now;
-    // A tab that comes back after a minute does not get a minute of simulation.
-    if (delta > 0.25) delta = 0.25;
+    if (dt > 0.25) dt = 0.25;
 
-    if (scripted) {
-      scripted(delta, world);
-    } else {
-      acc += delta;
-      var steps = 0;
-      while (acc >= CFG.STEP && steps < CFG.MAX_FRAME_STEPS) {
-        world.step(CFG.STEP, input);
-        input.consume();
-        acc -= CFG.STEP;
-        steps++;
-      }
-      if (steps === CFG.MAX_FRAME_STEPS) acc = 0;
+    // Esc toggles pause, but never from the title.
+    if (state.mode === 'playing' && input.consumeKey('Escape')) {
+      state.mode = 'paused';
+      menuSel = 0;
     }
 
-    renderer.draw(world);
-    drawOverlays(world);
-  }
-
-  function drawOverlays(world) {
-    var ctx = renderer.ctx;
-    var w = renderer.w, h = renderer.h;
-    ctx.setTransform(renderer.dpr, 0, 0, renderer.dpr, 0, 0);
-
-    if (world.ui.screen === 'playing' || world.ui.screen === 'pause' || world.ui.screen === 'help') {
-      world.hud.draw(ctx, w, h);
-    }
-    // the enter-car prompt, anchored over the car
-    if (world.ui.screen === 'playing' && world.enterHint) {
-      var cam = world.camera;
-      var sx = (world.enterHint.x - cam.x) * cam.zoom + w / 2;
-      var sy = (world.enterHint.y - cam.y) * cam.zoom + h / 2 - 46;
-      ctx.save();
-      ctx.font = '600 12px ui-sans-serif, system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      var tw = ctx.measureText(world.enterHint.text).width;
-      PC.U.roundRect(ctx, sx - tw / 2 - 12, sy - 16, tw + 24, 26, 13);
-      ctx.fillStyle = 'rgba(12,10,18,0.72)';
-      ctx.fill();
-      ctx.fillStyle = CFG.colors.hudText;
-      ctx.fillText(world.enterHint.text, sx, sy + 2);
-      ctx.restore();
-    }
-    // the job briefing card pauses the street while it is up
-    if (world.missions.briefing && world.ui.screen === 'playing') {
-      world.ui.drawBriefing(ctx, w, h, world.missions.briefing);
-    }
-    if (world.ui.screen !== 'playing') {
-      world.ui.draw(ctx, w, h);
-    }
-  }
-
-  // The briefing card reacts to E (start) and to walking away (cancel).
-  world.step = (function (original) {
-    return function (dt, input) {
-      original.call(world, dt, input);
-      var brief = world.missions.briefing;
-      if (brief && world.ui.screen === 'playing') {
-        if (input.pressed.KeyE || input.state.interact) {
-          input.state.interact = false;
-          world.missions.begin();
-        } else if (input.state.up || input.state.down || input.state.left || input.state.right) {
-          world.missions.briefing = null;
-          world.missions.state = 'idle';
-          world.hud.toast('Job left for later');
+    // Steal / leave a car.
+    if (state.mode === 'playing' && input.consumeKey('KeyE')) {
+      const p = state.player;
+      if (p.inCar) {
+        PC.Vehicles.playerExit(p, p.inCar);
+      } else {
+        const car = PC.Vehicles.nearestCar(state.cars(), p.x, p.y, 46);
+        if (car) {
+          if (car.driver === 'police' || car.driver === 'traffic') {
+            state.onCrime(40, 'grand theft auto');
+            state.stats.carsStolen += 1;
+            PC.UI.toast(state.toasts, 'Car stolen', PC.PALETTE.danger);
+          } else if (car.mission) {
+            PC.UI.toast(state.toasts, 'That is Rook\'s car', PC.PALETTE.gold);
+          }
+          PC.Vehicles.playerEnter(p, car);
+          car.driver = 'player';
+          audio.impact(0.4);
         }
       }
+    }
+
+    stepMenus();
+
+    if (state.mode === 'playing') {
+      acc += dt;
+      let steps = 0;
+      while (acc >= PC.STEP && steps < PC.MAX_STEPS) {
+        PC.World.step(state, input, PC.STEP, W, H);
+        acc -= PC.STEP;
+        steps += 1;
+        input.endStep();
+      }
+      if (steps === PC.MAX_STEPS) acc = 0;
+    } else {
+      // Menus: advance the clock and toasts only.
+      state.time += dt;
+      PC.UI.tickToasts(state.toasts, dt);
+      state.effects.update(dt);
+      input.endStep();
+    }
+
+    draw();
+    frames += 1;
+    global.requestAnimationFrame(frame);
+  }
+
+  function draw() {
+    ctx.save();
+
+    if (state.mode === 'title') {
+      // Draw the city behind the logo so the title screen is a real render.
+      PC.Render.drawWorld(ctx, state, W, H);
+      PC.UI.drawTitle(ctx, W, H, state);
+      ctx.restore();
+      return;
+    }
+
+    PC.Render.drawWorld(ctx, state, W, H);
+    PC.Hud.draw(ctx, state, W, H);
+    PC.UI.drawToasts(ctx, state.toasts, W);
+
+    if (state.mode === 'briefing' && briefingJob) {
+      PC.UI.drawBriefing(ctx, W, H, briefingJob);
+    } else if (state.mode === 'paused') {
+      PC.UI.drawPause(ctx, W, H, menuSel);
+    } else if (state.mode === 'busted') {
+      fade = Math.min(0.82, state.bustedTimer * 0.9);
+      PC.UI.drawBusted(ctx, W, H, fade);
+      if (state.bustedTimer > 1.2) {
+        ctx.textAlign = 'center';
+        ctx.font = '600 14px "Inter", system-ui, sans-serif';
+        ctx.fillStyle = 'rgba(223,230,245,0.8)';
+        ctx.fillText('ENTER  get back out there', W / 2, H / 2 + 92);
+      }
+    } else if (state.mode === 'wasted') {
+      fade = Math.min(0.80, state.wastedTimer * 0.9);
+      PC.UI.drawWasted(ctx, W, H, fade);
+      if (state.wastedTimer > 1.2) {
+        ctx.textAlign = 'center';
+        ctx.font = '600 14px "Inter", system-ui, sans-serif';
+        ctx.fillStyle = 'rgba(243,215,215,0.8)';
+        ctx.fillText('ENTER  try again', W / 2, H / 2 + 92);
+      }
+    }
+
+    ctx.restore();
+  }
+
+  // ---- boot --------------------------------------------------------------
+
+  global.addEventListener('resize', resize);
+  resize();
+
+  // A first click anywhere unlocks WebAudio in Chrome.
+  global.addEventListener('pointerdown', () => audio.start(), { once: true });
+
+  // Staged screenshots: ?shot=N runs a fixed scenario, so the four stills show the world
+  // at its best without me puppeting a keyboard.
+  if (shotMode) {
+    PC.Shots.apply(state, Number(params.get('shot') || 1), W, H);
+    const target = shotFrames || 90;
+    let n = 0;
+    const staged = (now) => {
+      if (n === 0) last = now;
+      const dt = 1 / 60;
+      PC.World.step(state, input, dt, W, H);
+      PC.Shots.tick(state, dt);
+      state.time += dt;
+      n += 1;
+      draw();
+      if (n < target) global.requestAnimationFrame(staged);
+      else document.body.dataset.shotReady = '1';
     };
-  })(world.step);
+    global.requestAnimationFrame(staged);
+    return;
+  }
 
-  requestAnimationFrame(frame);
-  window.__palmCity = world;
+  global.requestAnimationFrame(frame);
 
-  // Expose a deterministic frame-advance for the screenshot tool.
-  window.__stepFrames = function (n) {
-    for (var k = 0; k < n; k++) world.step(CFG.STEP, input);
-    renderer.draw(world);
-    drawOverlays(world);
-  };
-})();
+  // Expose a tiny hook for debugging in the console; harmless at runtime.
+  global.PalmCity = { state: () => state, start: startGame };
+})(window);

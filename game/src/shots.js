@@ -1,277 +1,208 @@
-// shots.js — four deterministic scenes for the screenshot pass. Each one plants the world in
-// an exact state (?shot=N), warms it up a fixed number of steps and lets the normal renderer
-// draw it. Nothing here invents art: every pixel comes from the same draw path the player sees.
-(function () {
+// Palm City — staged scenes for the four screenshots. ?shot=1..4 sets the world up so each
+// still shows a different slice of the game: the city from a car, the player on foot, a
+// police chase, and a mission in progress.
+(function (global) {
   'use strict';
-  var PC = window.PC;
-  var CFG = PC.CFG;
 
-  var AVENUE = CFG.GRID * CFG.CELL + CFG.ROAD / 2;   // the beach-side avenue's centre line
+  const PC = global.PC;
 
-  function copCar(world, x, y, angle) {
-    var car = new PC.Car(x, y, angle, {
-      name: 'Marlowe Cruiser', body: '#f2f0e6', trim: '#2b3a5e',
-      len: 104, wid: 50, top: 700, accel: 760, handling: 1.0, seats: 4,
-    }, world.rng);
-    car.driver = 'police';
-    car.occupied = true;
-    car.siren = true;
-    world.cars.list.push(car);
-    return car;
+  /** Put the player at a road position facing an angle, camera snapped behind them. */
+  function place(state, x, y, facing) {
+    const p = state.player;
+    p.x = x;
+    p.y = y;
+    p.facing = facing;
+    state.camera.x = x;
+    state.camera.y = y;
   }
 
-  // Place the player in a car exactly, at rest and facing a held heading.
-  function parkCar(world, x, y, angle, modelIndex) {
-    var model = PC.CAR_MODELS[modelIndex % PC.CAR_MODELS.length];
-    var car = new PC.Car(x, y, angle, model, world.rng);
+  /** Park a car at a spot and hand the keys to the player. */
+  function seat(state, x, y, angle, colour) {
+    const car = PC.Vehicles.makeCar(x, y, angle, colour || '#e9553f');
     car.driver = 'player';
     car.occupied = true;
-    world.cars.list.push(car);
-    world.player.inCar = car;
-    world.player.x = x;
-    world.player.y = y;
-    world.player.angle = angle;
-    world.camera.x = x;
-    world.camera.y = y;
+    state.parked.push(car);
+    state.player.inCar = car;
+    state.player.x = car.x;
+    state.player.y = car.y;
+    state.camera.x = car.x;
+    state.camera.y = car.y;
     return car;
   }
 
-  function clearTraffic(world) {
-    world.traffic.clear();
-  }
-
-  // A parked car at an exact spot; used to compose a street.
-  function propCar(world, x, y, angle, modelIndex) {
-    var model = PC.CAR_MODELS[modelIndex % PC.CAR_MODELS.length];
-    var car = new PC.Car(x, y, angle, model, world.rng);
-    car.parked = true;
-    world.cars.list.push(car);
-    return car;
-  }
-
-  function crowd(world, cx, cy, n, radius) {
-    for (var k = 0; k < n; k++) {
-      var a = (k / n) * 6.283;
-      var rr = radius * (0.34 + (k % 4) * 0.19);
-      world.peds.spawnAt(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
-    }
-  }
-
-  var SCENES = {};
-
-  // 1 — COVER. In a car on the beach avenue: ocean and pier on the right, neon shop row on
-  // the left, oncoming traffic, pedestrians on the sand. HUD, minimap and speedometer are
-  // all live, and a job marker sits on the map.
-  SCENES[1] = function (world) {
-    clearTraffic(world);
-    var x = AVENUE - 26;
-    var y = 1980;
-    var car = parkCar(world, x, y, -Math.PI / 2, 0);
+  /**
+   * Shot 1: the cover. A boulevard downtown at dusk, seen from a convertible heading
+   * north: traffic in both directions, palms, lit windows, the sea beyond the blocks.
+   */
+  function cover(state) {
+    const mid = Math.floor(PC.GRID / 2);
+    const x = mid * PC.CELL + PC.CELL / 2 - 17;
+    const y = (mid + 2.6) * PC.CELL;
+    const car = seat(state, x, y, -Math.PI / 2, '#e9553f');
+    car.speed = 210;
     car.vx = 0;
-    car.vy = -170;
-    car.speed = 170;
-    car.brakeLight = 0;
-    propCar(world, x + 52, y - 95, Math.PI / 2, 1);
-    propCar(world, x + 52, y + 185, Math.PI / 2, 6);
-    propCar(world, x + 52, y + 400, Math.PI / 2, 2);
-    propCar(world, x - 70, y + 300, 0, 4);
-    crowd(world, CFG.SAND_X + 74, y - 30, 13, 175);
-    crowd(world, x - 250, y + 150, 10, 135);
-    world.city.props.push({ type: 'umbrella', x: CFG.SAND_X + 168, y: y - 132, rot: 0.35, color: CFG.colors.neon[0] });
-    world.city.props.push({ type: 'umbrella', x: CFG.SAND_X + 214, y: y + 96, rot: -0.4, color: CFG.colors.neon[1] });
-    world.city.props.push({ type: 'lounger', x: CFG.SAND_X + 132, y: y - 96, rot: 0.28 });
-    world.city.props.push({ type: 'lounger', x: CFG.SAND_X + 178, y: y + 138, rot: -0.3 });
-    world.police.units.length = 0;
-    world.police.stars = 0;
-    world.shotCam = { x: x + 66, y: y - 58, zoom: 1.44, follow: true, dx: 66, dy: -58 };
-    world.camera.zoom = 1.44;
-    world.camera.x = x + 66;
-    world.camera.y = y - 58;
-    world.hud.banner('PALM CITY', 'The strip at golden hour — seven jobs wait on the map');
-    return true;
-  };
+    car.vy = -210;
 
-  // 2 — ON FOOT. Mid-pavement in a shop block, pedestrians all round, the job marker ahead.
-  SCENES[2] = function (world) {
-    clearTraffic(world);
-    // On foot in the middle of a downtown crossing: he is walking east across the paint, a
-    // queue of cars waits at the light, the crowd crosses with him, towers lean overhead.
-    var ix = CFG.CELL * 4 + CFG.ROAD / 2;   // the crossroads centre line, both ways
-    var wx = ix - 34;
-    var wy = ix + 26;
+    state.mode = 'playing';
+    state.wanted.stars = 0;
+    state.missions.state = 'idle';
+    state.missions.marker = null;
+    state.toasts.length = 0;
+    PC.UI.toast(state.toasts, 'Palm City · seven jobs on the coast', PC.PALETTE.gold);
 
-    world.player.inCar = null;
-    world.player.x = wx;
-    world.player.y = wy;
-    world.player.angle = 0.02;
-    world.player.vx = 62;
-    world.player.vy = 6;
-    world.player.stride = 3.2;
-    world.player.health = 78;
-    world.player.armour = 44;
-    world.aiming = false;
-
-    var mates = [
-      [wx + 96, wy + 22, 0.1], [wx - 74, wy - 26, 3.1], [wx + 168, wy - 8, 2.9],
-      [wx + 42, wy - 96, 1.6], [ix - 150, ix + 128, -0.4], [ix + 132, ix + 116, 2.6]
-    ];
-    for (var m = 0; m < mates.length; m++) {
-      var ped = world.peds.spawnAt(mates[m][0], mates[m][1]);
-      if (ped) ped.angle = mates[m][2];
+    // A few pedestrians walking the crossing in front of the camera.
+    state.peds.length = 0;
+    for (let i = 0; i < 9; i++) {
+      const px = x + (i - 4) * 42 + (i % 2) * 16;
+      const py = y - 160 - (i % 3) * 54;
+      const ped = PC.Entities.makeActor(px, py, { speed: 46 });
+      ped.facing = i % 2 === 0 ? 0 : Math.PI;
+      state.peds.push(ped);
     }
-    // traffic held at the light: two lanes coming north, two going south
-    propCar(world, ix - 26, ix + 200, -Math.PI / 2, 2);
-    propCar(world, ix + 26, ix + 268, Math.PI / 2, 5);
-    propCar(world, ix - 26, ix - 172, -Math.PI / 2, 1);
-    propCar(world, ix + 26, ix - 236, Math.PI / 2, 6);
-    propCar(world, ix + 210, ix - 26, Math.PI, 3);
-    propCar(world, ix - 208, ix + 26, 0, 0);
-    world.police.stars = 0;
-    world.police.units.length = 0;
-    world.shotCam = { x: wx + 46, y: wy + 16, zoom: 1.92 };
-    world.camera.zoom = 1.92;
-    world.camera.x = wx + 46;
-    world.camera.y = wy + 16;
-    world.hud.banner('ON FOOT', 'Downtown crossing — the strip on a Friday night');
-    return true;
-  }; SCENES[3] = function (world) {
-    clearTraffic(world);
-    // The bust: the player's coupe is stopped in the eastbound lane with a cruiser pulled up
-    // nose-to-nose in front and a second one blocking behind. A third is slewing in across
-    // the inside lane, and two officers are out of their cars on the tarmac with pistols up.
-    // Tight camera so the light bars, the blue doors and the star row all read at once.
-    var roadY = CFG.CELL * 4 + CFG.ROAD / 2;
-    var laneS = roadY + 26;
-    var laneN = roadY - 28;
-    var cx = 1520;
-
-    var pcar = parkCar(world, cx, laneS, 0, 0);
-    pcar.speed = 0;
-
-    var ahead = copCar(world, cx + 196, laneS + 4, Math.PI - 0.02);
-    var behind = copCar(world, cx - 206, laneS + 4, 0.02);
-    var cutting = copCar(world, cx + 148, laneN - 10, Math.PI - 0.86);
-    var cops = [ahead, behind, cutting];
-    for (var c = 0; c < cops.length; c++) {
-      cops[c].speed = 0;
-      cops[c].vx = 0;
-      cops[c].vy = 0;
-      world.police.units.push(new PC.CopUnit(cops[c], null, cops[c].x, cops[c].y));
-    }
-
-    // officers on foot, both on the ocean side of the player's car, out of the line of fire
-    var offA = new PC.Officer(cx + 104, laneS + 56);
-    offA.angle = Math.PI + 0.48;
-    var offB = new PC.Officer(cx - 92, laneS + 62);
-    offB.angle = Math.PI - 0.34;
-    var uA = new PC.CopUnit(null, offA, offA.x, offA.y);
-    var uB = new PC.CopUnit(null, offB, offB.x, offB.y);
-    uA.state = 'foot';
-    uB.state = 'foot';
-    world.police.units.push(uA);
-    world.police.units.push(uB);
-
-    world.police.stars = 3;
-    world.police.heat = 3;
-    world.player.wanted = 3;
-    world.police.sirenOn = true;
-    world.player.health = 58;
-    world.player.armour = 30;
-    crowd(world, cx - 60, roadY - 120, 8, 92);
-    world.shotCam = { x: cx + 16, y: laneS - 34, zoom: 1.90, allowHeat: true };
-    world.camera.zoom = 1.90;
-    world.camera.x = cx + 16;
-    world.camera.y = laneS - 34;
-    world.hud.banner('WANTED', 'Three stars. Every cruiser on the strip is heading your way.');
-    return true;
-  };
-
-  // 4 — MISSION. An active defend job with the crew closing in, a tracer in the air and the
-  // objective on the HUD.
-  SCENES[4] = function (world) {
-    clearTraffic(world);
-    // The defence outside the Sandbar Club: the player has his back to the sea, the crew is
-    // coming at him down the side street, the club's pink sign is lit behind them. Tracer in
-    // the air, muzzle flash on the tarmac, red pips over the shooters, job banner on top.
-    var club = world.city.markers.club;
-    var px = club.x + 24;
-    var py = club.y + 208;            // on the road south of the club
-    world.missions.index = 5;
-    world.missions.state = 'active';
-    world.missions.briefing = null;
-    world.missions.kills = 2;
-    world.missions.waveLeft = 1;
-    world.player.inCar = null;
-    world.player.x = px;
-    world.player.y = py;
-    world.player.angle = -Math.PI / 2 - 0.22;    // facing north, toward the club
-    world.player.ammo = 14;
-    world.player.health = 66;
-    world.player.armour = 12;
-    world.player.stride = 1.6;
-    world.aiming = true;
-    world.hostiles.length = 0;
-
-    var arcs = [-0.66, -0.24, 0.1, 0.44, 0.78];
-    for (var h = 0; h < arcs.length; h++) {
-      var ha = -Math.PI / 2 + arcs[h];
-      var dist = 126 + (h % 3) * 40;
-      var hx = px + Math.cos(ha) * dist;
-      var hy = py + Math.sin(ha) * dist;
-      var hostile = world.spawnHostile(hx, hy, 1);
-      hostile.angle = Math.atan2(py - hy, px - hx);
-      hostile.fireClock = 0.4 + h * 0.24;
-      hostile.stride = 0.9 + h * 0.28;
-    }
-    // cover: a car at his shoulder, another slewed in the near lane
-    propCar(world, px + 92, py + 14, Math.PI / 2, 7);
-    propCar(world, px - 156, py - 28, Math.PI / 2 + 0.14, 1);
-    propCar(world, px + 30, py + 226, 0, 5);
-    world.combat.tracers.push({ x1: px, y1: py - 6, x2: px + 30, y2: py - 182, life: 4, max: 4 });
-    world.combat.tracers.push({ x1: px - 206, y1: py - 96, x2: px - 34, y2: py - 14, life: 4, max: 4 });
-    world.effects.particles.push({ x: px + 10, y: py - 16, vx: 24, vy: -46, life: 4, max: 4, size: 6, color: '#ffd98a' });
-    world.effects.particles.push({ x: px + 22, y: py - 24, vx: 40, vy: -70, life: 4, max: 4, size: 4, color: '#ffe9b5' });
-    crowd(world, px - 190, py + 190, 7, 74);
-    world.shotCam = { x: px + 10, y: club.y + 150, zoom: 1.60 };
-    world.camera.zoom = 1.60;
-    world.camera.x = px + 10;
-    world.camera.y = club.y + 150;
-    return true;
-  };
-
-  function setup(world, input, n) {
-    world.ui.screen = 'playing';
-    world.player.cash = 4820;
-    world.player.ammo = 32;
-    world.player.health = 78;
-    world.player.armour = 62;
-    var scene = SCENES[n];
-    if (!scene) return null;
-    scene(world);
-    return warm;
   }
 
-  // Every step of the shot pass pins the camera to the scene's composition; scene 1 rides
-  // along with the car so the shot shows the car where the arithmetic put it.
-  function warm(dt, world) {
-    var cam = world.shotCam;
-    if (!cam) return;
-    if (!cam.allowHeat) {
-      // the staged streets are not a crime scene unless the scene says so
-      world.police.stars = 0;
-      world.police.heat = 0;
-      world.player.wanted = 0;
-      if (world.police.units.length === 0) world.police.sirenOn = false;
+  /**
+   * Shot 2: on foot, downtown crossing. The player stands at a kerb with the minimap and
+   * bars up, a pick-up glinting nearby, traffic waiting at the light.
+   */
+  function onFoot(state) {
+    const mid = Math.floor(PC.GRID / 2);
+    const x = mid * PC.CELL + PC.CELL / 2 + 26;
+    const y = (mid + 1) * PC.CELL + 34;
+    place(state, x, y, -Math.PI / 2 + 0.25);
+    state.mode = 'playing';
+    state.player.cash = 1240;
+    state.player.health = 84;
+    state.player.armour = 52;
+    state.player.ammo = 96;
+    state.player.inCar = null;
+    state.wanted.stars = 0;
+
+    // A pick-up on the pavement so the HUD has something to point at.
+    state.pickups.push({ kind: 'cash', x: x + 92, y: y - 46, taken: false, value: 60, bob: 0.6 });
+
+    state.peds.length = 0;
+    for (let i = 0; i < 12; i++) {
+      const px = x + (i % 4) * 64 - 96;
+      const py = y - 90 - Math.floor(i / 4) * 58;
+      const ped = PC.Entities.makeActor(px, py, { speed: 42 });
+      ped.facing = i % 3 === 0 ? Math.PI / 2 : -Math.PI / 2;
+      state.peds.push(ped);
     }
-    if (cam.follow) {
-      cam.x = world.player.x + (cam.dx || 0);
-      cam.y = world.player.y + (cam.dy || 0);
-    }
-    world.camera.x = cam.x;
-    world.camera.y = cam.y;
-    world.camera.zoom = cam.zoom;
-    void dt;
+
+    // A parked car by the kerb to make the "steal" prompt plausible.
+    const car = PC.Vehicles.makeCar(x - 74, y - 26, -Math.PI / 2, '#4f8fd4');
+    state.parked.push(car);
   }
 
-  window.PCShots = { setup: setup };
-})();
+  /**
+   * Shot 3: the heat. Three stars, a cruiser on the player's tail with the light bar going,
+   * officers on foot, the player firing from behind a parked car.
+   */
+  function police(state) {
+    const mid = Math.floor(PC.GRID / 2);
+    const x = mid * PC.CELL + PC.CELL / 2 + 6;
+    const y = (mid + 1) * PC.CELL + 40;
+    place(state, x, y, -Math.PI / 2);
+    state.mode = 'playing';
+    state.player.cash = 3480;
+    state.player.health = 62;
+    state.player.armour = 28;
+    state.player.inCar = null;
+    state.player.ammo = 71;
+
+    state.wanted.stars = 3;
+    state.wanted.heat = 300;
+    state.wanted.alert = 0.9;
+
+    state.cruisers.length = 0;
+    const c1 = PC.Police.makeCruiser(x + 30, y - 250, Math.PI / 2);
+    c1.lightPhase = 0.4;
+    const c2 = PC.Police.makeCruiser(x - 190, y - 120, 0.35);
+    c2.lightPhase = 1.2;
+    state.cruisers.push(c1, c2);
+
+    state.hostiles.length = 0;
+    const cop1 = PC.Police.makeOfficer(x + 96, y - 150, Math.PI / 2 + 0.4);
+    const cop2 = PC.Police.makeOfficer(x - 70, y - 176, Math.PI / 2 - 0.5);
+    state.hostiles.push(cop1, cop2);
+
+    // Muzzle flash and a couple of sparks so the frame has action in it.
+    state.effects.muzzle(x + 14, y - 18);
+    state.effects.burst(x + 60, y - 120, 'spark', 8, 0.8);
+    state.effects.addShake(3);
+    state.bullets.push(PC.Combat.makeBullet(x + 20, y - 30, -Math.PI / 2 + 0.1, 'player', 26));
+
+    state.peds.length = 0;
+    for (let i = 0; i < 6; i++) {
+      const ped = PC.Entities.makeActor(x + 120 + i * 34, y - 40 - (i % 2) * 40, { speed: 60 });
+      ped.panic = 2.5;
+      ped.facing = Math.PI / 2;
+      state.peds.push(ped);
+    }
+
+    // The player's cover.
+    const cover = PC.Vehicles.makeCar(x - 12, y - 70, 0, '#efe6d5');
+    state.parked.push(cover);
+  }
+
+  /**
+   * Shot 4: a mission. The briefing has been accepted, the marker sits across the street,
+   * the objective is on the HUD and the player is walking toward it with a gun up.
+   */
+  function mission(state) {
+    const anchor = PC.Missions.anchorOf(state.city, 'bank');
+    const x = anchor.x + 40;
+    const y = anchor.y + 140;
+    place(state, x, y, -Math.PI / 2 - 0.2);
+    state.mode = 'playing';
+    state.player.cash = 2150;
+    state.player.health = 96;
+    state.player.armour = 40;
+    state.player.inCar = null;
+    state.player.ammo = 88;
+    state.wanted.stars = 0;
+
+    state.missions.index = 1;             // Counter Service
+    state.missions.state = 'active';
+    state.missions.phase = 'rob';
+    state.missions.timer = 0;
+    state.missions.marker = { x: anchor.x, y: anchor.y, r: 52, label: 'Sunstate Bank' };
+
+    // A guard outside the bank, and a customer on the pavement.
+    state.hostiles.length = 0;
+    const guard = PC.Police.makeOfficer(anchor.x + 26, anchor.y - 26, Math.PI / 2);
+    guard.kind = 'thug';
+    guard.shirt = '#3b4250';
+    state.hostiles.push(guard);
+
+    state.peds.length = 0;
+    for (let i = 0; i < 7; i++) {
+      const ped = PC.Entities.makeActor(anchor.x - 130 + i * 44, anchor.y + 64 + (i % 2) * 30, { speed: 40 });
+      ped.facing = i % 2 ? 0 : Math.PI;
+      state.peds.push(ped);
+    }
+
+    PC.UI.toast(state.toasts, 'Counter Service · Sunstate Bank', PC.PALETTE.gold);
+  }
+
+  /** Apply a shot by number; 1 is the cover. */
+  function apply(state, n, W, H) {
+    state.camera.w = W;
+    state.camera.h = H;
+    // Give the traffic a moment of life before the still is taken.
+    if (n === 1) cover(state);
+    else if (n === 2) onFoot(state);
+    else if (n === 3) police(state);
+    else mission(state);
+  }
+
+  /** Let staged scenes drift a little so nothing is frozen mid-swing. */
+  function tick(state, dt) {
+    // Traffic and pedestrians already move inside World.step; here we only keep the
+    // mission clock honest so the HUD shows a live objective on the still.
+    if (state.missions.state === 'active') state.missions.timer += dt * 0;
+  }
+
+  PC.Shots = { apply, tick };
+})(window);
