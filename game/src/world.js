@@ -1,327 +1,486 @@
-/* Palm City — the world: everything that lives between two frames. It owns the city, the player,
-   the cars, the people, the heat, the jobs and the effects, and it advances them in one fixed step.
-   main.js owns screens and input; this file owns the simulation, plus save and load. */
-(function (PC) {
+// world.js — the simulation glue. It owns every system (city, cars, traffic, people, police,
+// combat, missions, effects, hud, ui, audio), runs one fixed step of each in the right order,
+// and carries the small connective tissue: entering and leaving cars, the runner in a chase,
+// hostile crews, noise, notifications, saving and respawning.
+(function () {
   'use strict';
+  var PC = window.PC;
+  var CFG = PC.CFG;
+  var U = PC.U;
 
-  var C = PC.CONFIG, P = PC.PALETTE, U = PC.util, V = PC.vehicles;
+  var SAVE_KEY = 'palmcity.save.v1';
 
-  function createWorld(seed, input, audio) {
-    var rng = PC.makeRng(seed);
-    var city = PC.city.generate(seed);
+  function World(canvas) {
+    this.canvas = canvas;
+    this.rng = U.makeRng(CFG.SEED ^ 0x5f3759df);
+    this.time = 0;
+    this.fixedStep = CFG.STEP;
 
-    var world = {
-      seed: seed, rng: rng, city: city, input: input, audio: audio,
-      player: null, traffic: [], parked: [], peds: [], pickups: [], heat: null, missions: null,
-      effects: PC.effects.make(), hud: PC.hud.make(),
-      time: 0, money: C.START_MONEY, noise: 0, damageFlash: 0,
-      stats: { jobs: 0, killed: 0, knocked: 0, damageTaken: 0, distance: 0, jacked: 0 },
-      over: false, overKind: '', overTimer: 0, storyDone: false,
-      marineCoupe: null, camera: { x: 0, y: 0, zoom: 1, targetZoom: 1 },
-      tutorial: { step: 0, timer: 0 }
-    };
+    this.city = new PC.City();
+    this.player = new PC.Player(CFG.CELL + CFG.ROAD + 60, CFG.CELL + CFG.ROAD + 60);
+    this.cars = new PC.CarManager(this.city, U.makeRng(CFG.SEED + 7));
+    this.cars.seedParked();
+    this.traffic = new PC.TrafficManager(this.city, this.cars, U.makeRng(CFG.SEED + 11));
+    this.peds = new PC.PedManager(this.city, U.makeRng(CFG.SEED + 13));
+    this.police = new PC.Police(this.city, this.cars, U.makeRng(CFG.SEED + 17));
+    this.effects = new PC.Effects(U.makeRng(CFG.SEED + 19));
+    this.combat = new PC.Combat(this);
+    this.missions = new PC.Missions(this);
+    this.hud = new PC.HUD(this);
+    this.ui = new PC.UI(this);
+    this.audio = new PC.AudioEngine();
 
-    world.heat = PC.police.makeHeat();
-    world.missions = PC.missions.make(world);
+    this.camera = { x: this.player.x, y: this.player.y, zoom: CFG.CAMERA_SCALE };
+    this.hostiles = [];
+    this.runner = null;
+    this.aiming = false;
+    this.enterHint = null;
+    this.stats = { cash: 0, jobs: 0, peds: 0, cops: 0, cars: 0, distance: 0 };
+    this.shotCam = null;
+    this.clock = 0;
+    this.lastCrash = 0;
+    this.distanceClock = 0;
 
-    // the player starts on the beach promenade in front of Vera's café
-    var start = PC.missions.SPOTS.cafe;
-    world.player = PC.entities.makePlayer(start.x + 46, start.y + 40);
-    world.player.angle = -Math.PI / 2;
-
-    PC.traffic.populateParked(world, rng);
-    for (var i = 0; i < 12; i++) PC.traffic.spawn(world, rng);
-    for (var p = 0; p < 22; p++) {
-      var ped = spawnPedNear(world, rng);
-      world.peds.push(ped);
-    }
-
-    // a white coupe waiting in the marina lot for job four
-    var marina = PC.missions.SPOTS.marina;
-    world.marineCoupe = V.makeCar(marina.x, marina.y, 0, { rng: rng, type: 'coupe', paint: '#efe9dc', parked: true });
-    world.parked.push(world.marineCoupe);
-
-    world.camera.x = world.player.x - C.VW / 2;
-    world.camera.y = world.player.y - C.VH / 2;
-
-    world.onBusted = function () { triggerOver(world, 'busted'); };
-    world.onWasted = function () { triggerOver(world, 'wasted'); };
-    world.onStoryComplete = function () {
-      world.storyDone = true;
-      world.hud.banner('Palm City is yours', 'Seven jobs. One city. Keep the engine warm.');
-      world.audio.cash();
-    };
-
-    return world;
+    this.combat.seedPickups(this.city);
+    this.seedPeds();
   }
 
-  function spawnPedNear(world, rng) {
-    for (var tries = 0; tries < 24; tries++) {
-      var ang = rng() * 6.283, d = 120 + rng() * 520;
-      var x = world.player.x + Math.cos(ang) * d;
-      var y = world.player.y + Math.sin(ang) * d;
-      if (x < 30 || y < 30 || x > C.CITY_W - 30 || y > C.CITY_H + C.BEACH_H - 60) continue;
-      if (PC.city.collideCircle(world.city, x, y, 10)) continue;
-      if (PC.city.onRoad(x, y)) continue;
-      return PC.entities.spawnPed(world.city, rng, x, y);
+  World.prototype.seedPeds = function () {
+    for (var k = 0; k < 26; k++) {
+      var seed = this.city.pedSpawns[Math.floor(this.rng() * this.city.pedSpawns.length)];
+      if (!seed) continue;
+      this.peds.spawnAt(seed.x + (this.rng() - 0.5) * 30, seed.y + (this.rng() - 0.5) * 30);
     }
-    return PC.entities.spawnPed(world.city, rng, world.player.x + 90, world.player.y);
-  }
+  };
 
-  /* ---------- the fixed step ---------- */
+  // ---- game flow -------------------------------------------------------------
+  World.prototype.startNewGame = function () {
+    var spawn = this.city.markers.diner;
+    this.player.reset(spawn.x + 40, spawn.y + 46);
+    this.player.cash = CFG.tuning.startCash;
+    this.player.ammo = 24;
+    this.player.armour = 30;
+    this.missions.reset();
+    this.police.clear();
+    this.hostiles.length = 0;
+    this.runner = null;
+    this.effects.clear();
+    this.camera.x = this.player.x;
+    this.camera.y = this.player.y;
+    this.stats = { cash: 0, jobs: 0, peds: 0, cops: 0, cars: 0, distance: 0 };
+    this.hud.banner('PALM CITY', 'Find Rosa at the Sandbox Diner — the gold marker on the map');
+    this.ui.screen = 'playing';
+    this.audio.start();
+    this.save();
+  };
 
-  function step(world, dt) {
-    if (world.over) {
-      world.overTimer += dt;
-      PC.effects.update(world.effects, dt);
-      return;
+  World.prototype.respawn = function () {
+    var hospital = this.city.markers.park;
+    this.player.reset(hospital.x, hospital.y + 60);
+    this.player.health = this.player.maxHealth;
+    this.player.cash = Math.max(0, this.player.cash - 150);
+    this.police.clear();
+    this.hostiles.length = 0;
+    this.runner = null;
+    this.missions.state = this.missions.index >= this.missions.jobs.length ? 'complete' : 'idle';
+    this.missions.briefing = null;
+    this.ui.screen = 'playing';
+    this.hud.toast('Hospital bill: $150');
+  };
+
+  World.prototype.wasted = function () {
+    if (this.ui.screen === 'dead') return;
+    this.audio.explosion();
+    this.effects.shake(18);
+    this.player.alive = false;
+    this.ui.dead('WASTED');
+  };
+
+  World.prototype.busted = function () {
+    if (this.ui.screen === 'dead') return;
+    var car = this.player.inCar;
+    if (car) car.driver = null;
+    this.player.inCar = null;
+    this.audio.missionFail();
+    this.ui.dead('BUSTED');
+  };
+
+  World.prototype.save = function () {
+    try {
+      var data = {
+        v: 1,
+        x: this.player.x, y: this.player.y,
+        health: this.player.health, armour: this.player.armour,
+        cash: this.player.cash, ammo: this.player.ammo,
+        job: this.missions.index,
+        wanted: this.player.wanted,
+        stats: this.stats,
+      };
+      window.localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+      return true;
+    } catch (e) {
+      return false;
     }
-    world.time += dt;
-    if (world.noise > 0) world.noise = Math.max(0, world.noise - dt * 1.4);
-    if (world.damageFlash > 0) world.damageFlash = Math.max(0, world.damageFlash - dt * 1.9);
+  };
 
-    var pl = world.player;
-    var prevX = pl.x, prevY = pl.y;
-
-    // --- on foot: enter and leave cars, fire, reload
-    handleEnterExit(world);
-
-    if (pl.inCar) {
-      V.updateCar(pl.inCar, world.input, dt, world, true);
-      var car = pl.inCar;
-      // the thing you drive can hurt people and property
-      for (var pi = 0; pi < world.peds.length; pi++) {
-        var ped = world.peds[pi];
-        if (ped.dead) continue;
-        if (U.dist2(ped.x, ped.y, car.x, car.y) < 30 * 30 && Math.abs(car.speed) > 40) {
-          ped.slide = 0.7; ped.slideAng = car.angle;
-          ped.hurt = 1;
-          world.effects.burst(ped.x, ped.y, 8, '#b23a3a', 120);
-          world.audio.thud();
-          PC.police.commit(world.heat, 'hitPed', world);
-          world.effects.shake(4);
-        }
-      }
-      if (!car.stolenSilent) {
-        // driving into a cruiser is a crime too
-        for (var ci = 0; ci < world.heat.cops.length; ci++) {
-          var cop = world.heat.cops[ci];
-          if (U.dist2(cop.x, cop.y, car.x, car.y) < 40 * 40 && Math.abs(car.speed) > 90) {
-            PC.police.commit(world.heat, 'ram', world);
-            car.stolenSilent = true;
-            break;
-          }
-        }
-      }
-      world.stats.distance += Math.abs(car.speed) * dt * 0.02;
-      if (world.audio.ready) {
-        world.audio.startEngine();
-        world.audio.setEngine(car.speed, world.input.keys.up);
-      }
-      world.camera.targetZoom = 1.04;
-    } else {
-      PC.entities.updatePlayer(pl, world.input, dt, world);
-      if (world.input.mouse.down && !world.input.mouse.wasDown) {
-        if (pl.ammo <= 0) PC.combat.startReload(pl, world);
-      }
-      if (world.input.mouse.down && pl.fireTimer <= 0) PC.combat.tryShoot(pl, world);
-      if (world.input.pressed('reload')) PC.combat.startReload(pl, world);
-      if (world.audio.ready) world.audio.stopEngine();
-      world.camera.targetZoom = 1.24;
+  World.prototype.load = function () {
+    var raw = null;
+    try {
+      raw = window.localStorage.getItem(SAVE_KEY);
+    } catch (e) {
+      raw = null;
     }
-    world.input.mouse.wasDown = world.input.mouse.down;
-
-    // --- the rest of the city
-    for (var ti = 0; ti < world.parked.length; ti++) {
-      var pk = world.parked[ti];
-      if (pk.driver === 'player') continue;
-      // parked cars sit still unless a chase script is driving them
-    }
-    for (var c2 = 0; c2 < world.traffic.length; c2++) PC.traffic.update(world.traffic[c2], dt, world, world.rng);
-
-    var all = world.traffic.concat(world.parked, world.heat.cops);
-    if (pl.inCar) all.push(pl.inCar);
-    V.separateCars(all, dt);
-
-    for (var pi2 = 0; pi2 < world.peds.length; pi2++) PC.entities.updatePed(world.peds[pi2], dt, world, world.rng);
-    PC.police.update(world.heat, dt, world);
-    PC.missions.update(world.missions, world, dt);
-    PC.combat.updatePickups(world, dt);
-    PC.effects.update(world.effects, dt);
-    world.hud.update(dt);
-
-    // --- top up the street population around the player
-    if (world.traffic.length < C.TRAFFIC.max) {
-      world.spawnClock = (world.spawnClock || 0) + dt;
-      if (world.spawnClock > C.TRAFFIC.spawnEvery) { world.spawnClock = 0; PC.traffic.spawn(world, world.rng); }
-    }
-    // drop traffic far behind and respawn nearer: the streets stay busy where the player is
-    for (var t3 = world.traffic.length - 1; t3 >= 0; t3--) {
-      var tc = world.traffic[t3];
-      if (tc.driver === 'player') continue;
-      if (U.dist2(tc.x, tc.y, pl.x, pl.y) > 1800 * 1800) world.traffic.splice(t3, 1);
-    }
-    if (world.peds.length < C.PEDS.max) {
-      world.pedClock = (world.pedClock || 0) + dt;
-      if (world.pedClock > 0.7) { world.pedClock = 0; world.peds.push(spawnPedNear(world, world.rng)); }
-    }
-    for (var p3 = world.peds.length - 1; p3 >= 0; p3--) {
-      var pd = world.peds[p3];
-      if (!pd.dead && U.dist2(pd.x, pd.y, pl.x, pl.y) > 1500 * 1500) world.peds.splice(p3, 1);
-    }
-
-    updateCamera(world, dt);
-    world.hud.objectiveProgress = 0;
-  }
-
-  function handleEnterExit(world) {
-    var pl = world.player;
-    if (world.input.pressed('enter')) {
-      if (pl.inCar) {
-        var car = pl.inCar;
-        pl.inCar = null;
-        pl.x = car.x + Math.cos(car.angle + Math.PI / 2) * (car.wid * 0.7 + 16);
-        pl.y = car.y + Math.sin(car.angle + Math.PI / 2) * (car.wid * 0.7 + 16);
-        pl.vx = pl.vy = 0;
-        if (PC.city.collideCircle(world.city, pl.x, pl.y, 9)) {
-          pl.x = car.x - Math.cos(car.angle + Math.PI / 2) * (car.wid * 0.7 + 16);
-          pl.y = car.y - Math.sin(car.angle + Math.PI / 2) * (car.wid * 0.7 + 16);
-        }
-        car.driver = null;
-        car.speed *= 0.2;
-        world.audio.horn();
-      } else {
-        var pool = world.parked.concat(world.traffic);
-        var target = V.nearestEnterable(pool, pl.x, pl.y, C.PLAYER.carEnterRange);
-        if (target) {
-          var wasOccupied = target.occupied;
-          target.driver = 'player';
-          target.speed = 0;
-          pl.inCar = target;
-          pl.x = target.x; pl.y = target.y;
-          if (wasOccupied) {
-            PC.police.commit(world.heat, 'carjack', world);
-            world.stats.jacked += 1;
-            world.hud.flash('Grand theft auto', P.heat);
-          } else {
-            world.hud.flash('Hotwired', P.accent2);
-          }
-          if (target === world.marineCoupe) target.stolenWhite = true;
-          world.audio.horn();
-        }
-      }
-    }
-    if (pl.inCar && world.input.pressed('horn')) world.audio.horn();
-  }
-
-  function updateCamera(world, dt) {
-    var pl = world.player;
-    var cam = world.camera;
-    // a staged screenshot pins the camera; live play never sets this
-    if (cam.lock) return;
-    var tx = pl.x, ty = pl.y;
-    if (pl.inCar) {
-      // lead the camera a little in the direction of travel
-      tx += Math.cos(pl.inCar.angle) * Math.min(150, pl.inCar.speed * 0.42);
-      ty += Math.sin(pl.inCar.angle) * Math.min(150, pl.inCar.speed * 0.42);
-    } else {
-      tx += Math.cos(pl.angle) * 40;
-      ty += Math.sin(pl.angle) * 40;
-    }
-    var z = U.lerp(cam.zoom, cam.targetZoom, Math.min(1, dt * 3));
-    cam.zoom = z;
-    var vw = C.VW / z, vh = C.VH / z;
-    var wantX = tx - vw / 2, wantY = ty - vh / 2;
-    var k = Math.min(1, dt * 6.5);
-    cam.x = U.lerp(cam.x, wantX, k);
-    cam.y = U.lerp(cam.y, wantY, k);
-    cam.x = U.clamp(cam.x, 0, Math.max(0, C.CITY_W - vw));
-    cam.y = U.clamp(cam.y, 0, Math.max(0, C.WORLD_H - vh));
-  }
-
-  function triggerOver(world, kind) {
-    if (world.over) return;
-    world.over = true;
-    world.overKind = kind;
-    world.overTimer = 0;
-    world.hud.banner(kind === 'busted' ? 'BUSTED' : 'WASTED', kind === 'busted' ? 'Booked and released. The city keeps your cash.' : 'The beach hospital patches you up.');
-    if (kind === 'busted') world.audio.busted(); else world.audio.wasted();
-  }
-
-  /* Recover from a bust or a wipe: keep progression, take a cut of the cash. */
-  function respawn(world) {
-    var pl = world.player;
-    world.over = false;
-    world.overKind = '';
-    world.overTimer = 0;
-    world.money = Math.max(0, Math.floor(world.money * 0.85));
-    pl.health = C.PLAYER.maxHealth;
-    pl.armor = 0;
-    pl.alive = true;
-    pl.ammo = C.COMBAT.clipSize;
-    pl.reserve = 96;
-    pl.reloading = 0;
-    if (pl.inCar) { pl.inCar.driver = null; pl.inCar = null; }
-    var s = PC.missions.SPOTS.cafe;
-    pl.x = s.x + 40; pl.y = s.y + 30;
-    pl.vx = pl.vy = 0;
-    PC.police.clear(world.heat, world);
-    world.missions.state = 'idle';
-    world.missions.job = null;
-    world.missions.step = 0;
-    world.hud.flash('Patched up. Get back to work.', P.accent2);
-  }
-
-  /* ---------- save and load ---------- */
-
-  var SAVE_KEY = 'palm-city.save.v1';
-
-  function save(world) {
-    var pl = world.player;
-    var data = {
-      v: 1, seed: world.seed, money: world.money, storyDone: world.storyDone,
-      jobIndex: world.missions.index, completed: world.missions.completed,
-      log: world.missions.log.slice(),
-      player: { x: pl.x, y: pl.y, health: pl.health, armor: pl.armor, ammo: pl.ammo, reserve: pl.reserve },
-      stats: world.stats, time: world.time
-    };
-    try { window.localStorage.setItem(SAVE_KEY, JSON.stringify(data)); return true; } catch (e) { return false; }
-  }
-
-  function hasSave() {
-    try { return !!window.localStorage.getItem(SAVE_KEY); } catch (e) { return false; }
-  }
-
-  function load(world) {
-    var raw;
-    try { raw = window.localStorage.getItem(SAVE_KEY); } catch (e) { return false; }
     if (!raw) return false;
     var data;
-    try { data = JSON.parse(raw); } catch (e) { return false; }
-    if (!data || data.v !== 1) return false;
-    world.money = data.money || 0;
-    world.storyDone = !!data.storyDone;
-    world.stats = data.stats || world.stats;
-    world.missions.index = Math.min(data.jobIndex || 0, PC.missions.JOBS.length);
-    world.missions.completed = data.completed || 0;
-    world.missions.log = data.log || [];
-    world.missions.state = world.missions.index >= PC.missions.JOBS.length ? 'finished' : 'idle';
-    var p = world.player;
-    if (data.player) {
-      p.x = data.player.x; p.y = data.player.y;
-      p.health = data.player.health; p.armor = data.player.armor;
-      p.ammo = data.player.ammo; p.reserve = data.player.reserve;
+    try {
+      data = JSON.parse(raw);
+    } catch (e) {
+      return false;
     }
-    if (p.inCar) { p.inCar.driver = null; p.inCar = null; }
-    PC.police.clear(world.heat, world);
-    world.camera.x = p.x - C.VW / 2;
-    world.camera.y = p.y - C.VH / 2;
-    world.hud.flash('Loaded', P.accent2);
+    if (!data || data.v !== 1) return false;
+    this.player.reset(data.x, data.y);
+    this.player.health = U.clamp(data.health || 100, 1, this.player.maxHealth);
+    this.player.armour = U.clamp(data.armour || 0, 0, this.player.maxArmour);
+    this.player.cash = data.cash || 0;
+    this.player.ammo = data.ammo || 0;
+    this.missions.index = U.clamp(data.job || 0, 0, this.missions.jobs.length);
+    this.missions.state = this.missions.index >= this.missions.jobs.length ? 'complete' : 'idle';
+    this.missions.briefing = null;
+    this.missions.targetCar = null;
+    this.police.clear();
+    this.hostiles.length = 0;
+    this.runner = null;
+    if (data.stats) this.stats = data.stats;
+    this.camera.x = this.player.x;
+    this.camera.y = this.player.y;
+    this.ui.screen = 'playing';
+    this.hud.banner('WELCOME BACK', 'Job ' + Math.min(this.missions.index + 1, 7) + ' of 7 — the marker is on your map');
     return true;
-  }
-
-  PC.world = {
-    create: createWorld, step: step, save: save, load: load,
-    hasSave: hasSave, respawn: respawn, SAVE_KEY: SAVE_KEY
   };
-})(window.PC = window.PC || {});
+
+  // ---- helpers ---------------------------------------------------------------
+  World.prototype.playerInCar = function () {
+    return !!this.player.inCar;
+  };
+
+  World.prototype.playerCar = function () {
+    return this.player.inCar || null;
+  };
+
+  World.prototype.notify = function (text) {
+    this.hud.toast(text);
+  };
+
+  // A loud noise pulls the police toward it even without a direct sighting.
+  World.prototype.noise = function (x, y, radius) {
+    if (!this.police.stars) return;
+    var d = U.dist(x, y, this.player.x, this.player.y);
+    if (d < radius) this.police.lastKnown = { x: x, y: y };
+  };
+
+  World.prototype.spawnHostile = function (x, y, tough) {
+    var h = {
+      x: x, y: y, angle: 0, stride: 0,
+      health: 90 * (tough || 1), maxHealth: 90 * (tough || 1),
+      alive: true, hitFlash: 0, radius: 12,
+      fireClock: U.randRange(this.rng, 0.4, 1.8),
+      speed: 96 + this.rng() * 40,
+      tough: tough || 1,
+    };
+    this.hostiles.push(h);
+    return h;
+  };
+
+  // ---- one fixed step --------------------------------------------------------
+  World.prototype.step = function (dt, input) {
+    this.time += dt;
+    this.clock += dt;
+    var player = this.player;
+    var ui = this.ui;
+
+    this.audio.update(dt, this);
+    this.effects.update(dt);
+    this.hud.update(dt);
+
+    if (ui.screen !== 'playing') {
+      ui.update(dt);
+      this.updateIdleWorld(dt, input);
+      return;
+    }
+
+    var aimAngle = input.mouseAngle(this.renderer ? this.renderer.w : window.innerWidth, this.renderer ? this.renderer.h : window.innerHeight, player.angle);
+    this.aiming = input.state.aim && !player.inCar;
+    input.state.aimAngle = aimAngle;
+    if (this.aiming) player.angle = aimAngle;
+
+    // ---- on foot or in a car ------------------------------------------------
+    if (player.inCar) {
+      this.drivePlayer(dt, input);
+    } else {
+      player.updateFoot(dt, input.state, this.city);
+      // entering a car
+      if (input.pressed.KeyE || input.state.interact) {
+        var car = this.cars.nearest(player.x, player.y, CFG.tuning.carEnterRange, true);
+        if (car && car.health > 0) this.enterCar(car);
+      }
+      // punching
+      if (input.state.aim === false && input.state.action && !input.state.fire) this.combat.punch();
+    }
+    input.state.interact = false;
+
+    // ---- weapons -----------------------------------------------------------
+    if (input.state.fire) {
+      if (player.inCar) this.combat.playerShot(player.inCar.angle, true);
+      else this.combat.playerShot(aimAngle, false);
+    }
+
+    // ---- world systems -----------------------------------------------------
+    this.cars.updateDrivers(dt, this);
+    this.traffic.update(dt, this);
+    this.peds.update(dt, this);
+    this.police.update(dt, this);
+    this.combat.update(dt);
+    this.updateHostiles(dt);
+    this.updateRunner(dt);
+    this.missions.update(dt);
+    this.updateEnterHint();
+
+    // ---- collision with people --------------------------------------------
+    this.crushCheck(dt);
+
+    // ---- eigenbookkeeping --------------------------------------------------
+    player.wanted = this.police.stars;
+    if (player.inCar) {
+      this.distanceClock += player.inCar.speed * dt;
+      if (this.distanceClock > 400) {
+        this.stats.distance += 0.1;
+        this.distanceClock = 0;
+      }
+    }
+    if (player.health <= 0 && player.alive) {
+      player.alive = false;
+      this.wasted();
+    }
+    if (this.clock > 2 && (this.clock % 30) < dt) this.save();
+
+    ui.update(dt);
+  };
+
+  // The world keeps breathing behind the title and pause screens, just slower.
+  World.prototype.updateIdleWorld = function (dt, input) {
+    this.traffic.update(dt, this);
+    this.peds.update(dt, this);
+    this.effects.update(dt);
+    if (this.ui.screen === 'title' && !this.player.inCar) {
+      // a slow drift of the player's gaze so the title backdrop is alive
+      this.player.angle += dt * 0.06;
+    }
+    void input;
+  };
+
+  World.prototype.drivePlayer = function (dt, input) {
+    var car = this.player.inCar;
+    var prevSpeed = car.speed;
+    var throttle = 0;
+    if (input.state.up) throttle += 1;
+    if (input.state.down) throttle -= 1;
+    // A/D steer; with the mouse held the car also leans toward the cursor
+    var steer = 0;
+    if (input.state.left) steer -= 1;
+    if (input.state.right) steer += 1;
+    if (input.state.aim && !steer) {
+      var aim = input.state.aimAngle || car.angle;
+      var diff = U.wrapAngle(aim - car.angle);
+      steer = U.clamp(diff * 1.4, -1, 1);
+    }
+    if (steer === 0) {
+      var d2 = U.wrapAngle((input.state.aimAngle || car.angle) - car.angle);
+      if (input.state.aim && Math.abs(d2) < 0.5) steer = U.clamp(d2 * 1.6, -1, 1);
+    }
+    car.drive(dt, {
+      throttle: throttle,
+      steer: steer,
+      brake: input.state.action,
+      handbrake: input.state.action && input.state.sprint,
+      boost: input.state.sprint,
+    }, this.city);
+    this.player.x = car.x;
+    this.player.y = car.y;
+    this.player.angle = car.angle;
+
+    // leave the car
+    if (input.pressed.KeyE || input.state.interact) {
+      this.exitCar();
+      input.state.interact = false;
+      return;
+    }
+
+    // crash sounds and skid marks
+    if (prevSpeed - car.speed > 120 && this.clock - this.lastCrash > 0.25) {
+      this.lastCrash = this.clock;
+      this.audio.crash(prevSpeed - car.speed);
+      this.effects.shake(6);
+    }
+    if (Math.abs(steer) > 0.6 && car.speed > 300) {
+      this.effects.skid(car.x - Math.cos(car.angle + 1.57) * 20, car.y - Math.sin(car.angle + 1.57) * 20, car.angle);
+      this.effects.skid(car.x + Math.cos(car.angle + 1.57) * 20, car.y + Math.sin(car.angle + 1.57) * 20, car.angle);
+    }
+    // honking for the fun of it
+    if (input.pressed.KeyH) this.audio.horn();
+    input.state.interact = false;
+  };
+
+  World.prototype.enterCar = function (car) {
+    var player = this.player;
+    car.driver = 'player';
+    car.occupied = true;
+    car.stop();
+    player.inCar = car;
+    player.vx = player.vy = 0;
+    this.audio.start();
+    this.notify('Stole a ' + car.model.name);
+    if (car.parked) {
+      this.police.crime('cars', car.x, car.y);
+      car.parked = false;
+    }
+    this.stats.cars++;
+    this.audio.uiClick();
+  };
+
+  World.prototype.exitCar = function () {
+    var car = this.player.inCar;
+    if (!car) return;
+    car.driver = null;
+    car.stop();
+    var side = car.angle + Math.PI / 2;
+    var x = U.clamp(car.x + Math.cos(side) * (car.wid / 2 + 26), 12, CFG.WORLD_W - 12);
+    var y = U.clamp(car.y + Math.sin(side) * (car.wid / 2 + 26), 12, CFG.WORLD_H - 12);
+    var fixed = this.city.resolveCircle(x, y, this.player.radius);
+    this.player.x = fixed.x;
+    this.player.y = fixed.y;
+    this.player.inCar = null;
+    this.player.angle = car.angle;
+  };
+
+  World.prototype.updateEnterHint = function () {
+    if (this.player.inCar) {
+      this.enterHint = { text: 'E — get out', x: this.player.x, y: this.player.y };
+      return;
+    }
+    var near = this.cars.nearest(this.player.x, this.player.y, CFG.tuning.carEnterRange, true);
+    if (near) {
+      this.enterHint = { text: 'E — steal the ' + near.model.name, x: near.x, y: near.y };
+    } else {
+      this.enterHint = null;
+    }
+  };
+
+  // People under a moving car get hurt; this is the whole point of a car.
+  World.prototype.crushCheck = function (dt) {
+    var player = this.player;
+    if (!player.inCar) return;
+    var car = player.inCar;
+    if (car.speed < 130) return;
+    for (var k = 0; k < this.peds.list.length; k++) {
+      var p = this.peds.list[k];
+      if (!p.alive) continue;
+      if (U.dist(p.x, p.y, car.x, car.y) < car.len * 0.5) {
+        var dead = p.damage(140, this);
+        this.effects.burst(p.x, p.y, '#c8354a', 8);
+        this.effects.shake(4);
+        car.vx *= 0.92;
+        car.vy *= 0.92;
+        car.damage(6);
+        this.police.crime('pedestrian', car.x, car.y);
+        if (dead) this.stats.peds++;
+      }
+    }
+    // officers too
+    for (var u = 0; u < this.police.units.length; u++) {
+      var o = this.police.units[u].officer;
+      if (!o || !o.alive) continue;
+      if (U.dist(o.x, o.y, car.x, car.y) < car.len * 0.5) {
+        o.health -= 120;
+        o.hitFlash = 1;
+        this.police.crime('police', car.x, car.y);
+        if (o.health <= 0) {
+          o.alive = false;
+          this.notify('Officer down — this is going to get loud');
+          this.stats.cops++;
+        }
+      }
+    }
+    void dt;
+  };
+
+  // ---- hostiles (mission crews) ---------------------------------------------
+  World.prototype.updateHostiles = function (dt) {
+    var player = this.player;
+    for (var k = this.hostiles.length - 1; k >= 0; k--) {
+      var h = this.hostiles[k];
+      if (!h.alive) {
+        // gone from the list once the body has been down a moment
+        h.corpse = (h.corpse || 0) + dt;
+        if (h.corpse > 3) this.hostiles.splice(k, 1);
+        continue;
+      }
+      if (h.hitFlash > 0) h.hitFlash -= dt * 3;
+      var d = U.dist(h.x, h.y, player.x, player.y);
+      var a = Math.atan2(player.y - h.y, player.x - h.x);
+      h.angle = a;
+      if (d > 150) {
+        var nx = h.x + Math.cos(a) * h.speed * dt;
+        var ny = h.y + Math.sin(a) * h.speed * dt;
+        var fixed = this.city.resolveCircle(nx, ny, h.radius);
+        h.x = fixed.x;
+        h.y = fixed.y;
+        h.stride += h.speed * dt * 0.06;
+      }
+      h.fireClock -= dt;
+      if (h.fireClock <= 0 && d < 560) {
+        h.fireClock = U.randRange(this.rng, 1.0, 2.0);
+        var hits = this.rng() < 0.42;
+        this.combat.copShot(h.x, h.y, a, d, hits, h);
+      }
+    }
+    // the player's own shots damage hostiles through the combat trace
+    for (var t = 0; t < this.combat.tracers.length; t++) void t;
+  };
+
+  World.prototype.hostileHit = function (x, y, radius) {
+    for (var k = 0; k < this.hostiles.length; k++) {
+      var h = this.hostiles[k];
+      if (!h.alive) continue;
+      if (U.dist(h.x, h.y, x, y) < radius) return h;
+    }
+    return null;
+  };
+
+  // ---- the chase runner -----------------------------------------------------
+  World.prototype.updateRunner = function (dt) {
+    if (!this.runner || !this.runner.car) return;
+    var car = this.runner.car;
+    var tgt = this.runner.target;
+    car.driver = 'runner';
+    var a = Math.atan2(tgt.y - car.y, tgt.x - car.x);
+    var diff = U.wrapAngle(a - car.angle);
+    car.drive(dt, {
+      throttle: 1,
+      steer: U.clamp(diff * 2.0, -1, 1),
+      brake: Math.abs(diff) > 1.2 && car.speed > 380,
+    }, this.city);
+    car.occupied = true;
+    // the runner keeps a head start but never gets away for free
+    if (car.health <= 0) {
+      this.effects.burst(car.x, car.y, '#ffb347', 20);
+      this.effects.shake(10);
+      this.audio.explosion();
+      this.runner.car = null;
+      this.missions.targetCar = null;
+      this.missions.complete();
+    }
+  };
+
+  PC.World = World;
+  PC.SAVE_KEY = SAVE_KEY;
+})();
