@@ -1,81 +1,111 @@
-/* Palm City — the keyboard and mouse. One object holds the key states the game asks about and
-   the pointer mapped into world coordinates each frame; pressed-this-frame edges are kept so an
-   action (enter car, fire, pause) fires once per press, not once per frame. */
-(function (PC) {
+// input.js — keyboard, mouse and pointer lock, plus a deterministic replay mode the shot
+// scenes use. Everything downstream reads the flat `state` object; nothing reads events.
+(function () {
   'use strict';
+  var PC = window.PC;
 
-  var BIND = {
-    KeyW: 'up', ArrowUp: 'up',
-    KeyS: 'down', ArrowDown: 'down',
-    KeyA: 'left', ArrowLeft: 'left',
-    KeyD: 'right', ArrowRight: 'right',
-    ShiftLeft: 'sprint', ShiftRight: 'sprint',
-    Space: 'brake',
-    KeyE: 'enter',
-    KeyF: 'fire',
-    KeyR: 'reload',
-    KeyM: 'map',
-    Escape: 'pause',
-    KeyH: 'horn',
-    Enter: 'confirm',
-    KeyQ: 'mission'
-  };
-
-  function createInput(canvas) {
-    var state = {
-      keys: { up: false, down: false, left: false, right: false, sprint: false, brake: false },
-      edge: {},
-      mouse: { x: 640, y: 360, wx: 0, wy: 0, active: false, down: false, clicked: false },
-      anyKey: false
+  function Input(canvas) {
+    this.canvas = canvas;
+    this.state = {
+      up: false, down: false, left: false, right: false,
+      sprint: false, aim: false, fire: false, action: false,
+      handbrake: false, mouseX: 0, mouseY: 0, aimAngle: 0,
+      clicked: false, wheel: 0,
     };
+    this.pressed = {};          // edge-triggered keys, cleared by the world each step
+    this.locked = false;
+    this.scripted = null;       // a function(dt, state) used by the shot scenes
+    this.bind();
+  }
 
-    function set(name, val, e) {
-      if (name === 'up' || name === 'down' || name === 'left' || name === 'right' || name === 'sprint' || name === 'brake') {
-        state.keys[name] = val;
-      }
-      if (val && !state.edge[name]) state.edge[name] = true;
-      if (e && (name === 'brake' || name === 'enter' || name === 'fire')) e.preventDefault();
-      state.anyKey = true;
-    }
-
+  Input.prototype.bind = function () {
+    var self = this;
+    var map = {
+      KeyW: 'up', ArrowUp: 'up',
+      KeyS: 'down', ArrowDown: 'down',
+      KeyA: 'left', ArrowLeft: 'left',
+      KeyD: 'right', ArrowRight: 'right',
+      ShiftLeft: 'sprint', ShiftRight: 'sprint',
+      Space: 'action',
+      KeyE: 'interact',
+      KeyF: 'fire',
+    };
     window.addEventListener('keydown', function (e) {
-      var name = BIND[e.code];
-      if (!name) return;
-      if (name === 'pause' || name === 'brake' || name === 'enter') e.preventDefault();
-      set(name, true, e);
+      if (map[e.code]) {
+        self.state[map[e.code]] = true;
+        if (e.code === 'Space') self.state.aim = false;
+      }
+      if (e.code === 'Space') e.preventDefault();
+      self.pressed[e.code] = true;
+      if (self.onKey) self.onKey(e.code, e);
     });
     window.addEventListener('keyup', function (e) {
-      var name = BIND[e.code];
-      if (!name) return;
-      set(name, false);
+      if (map[e.code]) self.state[map[e.code]] = false;
     });
     window.addEventListener('blur', function () {
-      state.keys.up = state.keys.down = state.keys.left = state.keys.right = false;
-      state.keys.sprint = state.keys.brake = false;
+      self.state.up = self.state.down = self.state.left = self.state.right = false;
+      self.state.fire = false;
+      self.state.action = false;
+      self.state.sprint = false;
     });
 
     canvas.addEventListener('mousemove', function (e) {
-      var r = canvas.getBoundingClientRect();
-      state.mouse.x = (e.clientX - r.left) / r.width * canvas.width;
-      state.mouse.y = (e.clientY - r.top) / r.height * canvas.height;
-      state.mouse.active = true;
+      var rect = self.canvas.getBoundingClientRect();
+      self.state.mouseX = e.clientX - rect.left;
+      self.state.mouseY = e.clientY - rect.top;
+      self.state.aim = true;
+      if (self.locked) {
+        self.state.aimAngle += e.movementX * 0.0022;
+      }
     });
     canvas.addEventListener('mousedown', function (e) {
-      if (e.button === 0) { state.mouse.down = true; state.mouse.clicked = true; }
-      e.preventDefault();
+      self.state.fire = true;
+      self.state.clicked = true;
+      self.state.aim = true;
+      if (self.onClick) self.onClick(e);
     });
-    window.addEventListener('mouseup', function (e) {
-      if (e.button === 0) state.mouse.down = false;
+    window.addEventListener('mouseup', function () {
+      self.state.fire = false;
     });
     canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    canvas.addEventListener('wheel', function (e) {
+      self.state.wheel += Math.sign(e.deltaY);
+      e.preventDefault();
+    }, { passive: false });
 
-    state.pressed = function (name) {
-      if (state.edge[name]) { state.edge[name] = false; return true; }
-      return false;
-    };
-    state.clearEdges = function () { state.edge = {}; state.mouse.clicked = false; };
-    return state;
-  }
+    canvas.addEventListener('click', function () {
+      if (!self.locked && canvas.requestPointerLock) {
+        try { canvas.requestPointerLock(); } catch (err) { void err; }
+      }
+    });
+    document.addEventListener('pointerlockchange', function () {
+      self.locked = document.pointerLockElement === canvas;
+    });
+  };
 
-  PC.input = { create: createInput, BIND: BIND };
-})(window.PC = window.PC || {});
+  // Convert a mouse position to an aim angle from the screen centre.
+  Input.prototype.mouseAngle = function (w, h, fallback) {
+    var dx = this.state.mouseX - w / 2;
+    var dy = this.state.mouseY - h / 2;
+    if (Math.abs(dx) + Math.abs(dy) < 6) return fallback;
+    return Math.atan2(dy, dx);
+  };
+
+  Input.prototype.consume = function () {
+    this.pressed = {};
+    this.state.clicked = false;
+    this.state.wheel = 0;
+  };
+
+  Input.prototype.applyScript = function (dt) {
+    if (this.scripted) this.scripted(dt, this.state);
+  };
+
+  // A helper for shot scenes: press keys between times.
+  Input.scriptPress = function (state, from, to, keys) {
+    for (var k = 0; k < keys.length; k++) state[keys[k]] = true;
+    void from; void to;
+  };
+
+  PC.Input = Input;
+})();
