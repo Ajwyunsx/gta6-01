@@ -609,13 +609,15 @@
       // The light bar: two lamps, one lit, with a beam thrown onto the tarmac beside the car.
       const phase = Math.floor(car.lightPhase * 2.4) % 2 === 0;
       const glowColour = phase ? '255,78,78' : '80,120,255';
-      const beam = ctx.createRadialGradient(-4, 0, car.width * 0.3, -4, 0, 210);
-      beam.addColorStop(0, `rgba(${glowColour},0.55)`);
-      beam.addColorStop(0.45, `rgba(${glowColour},0.22)`);
+      // The bloom is deliberately tight: a wide wash turns the whole street lavender
+      // and stops reading as a light bar.
+      const beam = ctx.createRadialGradient(-4, 0, car.width * 0.25, -4, 0, 96);
+      beam.addColorStop(0, `rgba(${glowColour},0.34)`);
+      beam.addColorStop(0.5, `rgba(${glowColour},0.11)`);
       beam.addColorStop(1, `rgba(${glowColour},0)`);
       ctx.fillStyle = beam;
       ctx.beginPath();
-      ctx.arc(-4, 0, 210, 0, Math.PI * 2);
+      ctx.arc(-4, 0, 96, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.fillStyle = '#161a22';
@@ -891,8 +893,8 @@
 
     // Wanted flash at the screen edge.
     if (state.wanted.alert > 0 && state.wanted.stars > 0) {
-      const a = state.wanted.alert * 0.34;
-      const eg = ctx.createRadialGradient(W / 2, H / 2, H * 0.36, W / 2, H / 2, H * 0.96);
+      const a = state.wanted.alert * 0.17;
+      const eg = ctx.createRadialGradient(W / 2, H / 2, H * 0.5, W / 2, H / 2, H * 1.02);
       eg.addColorStop(0, 'rgba(226,70,70,0)');
       eg.addColorStop(1, `rgba(226,70,70,${a})`);
       ctx.fillStyle = eg;

@@ -105,7 +105,6 @@
     state.parked.push(PC.Vehicles.makeCar(mid * PC.CELL - PC.ROAD / 2 - 22, state.city.beachTop - 210, -Math.PI / 2, '#4f8fd4'));
     state.parked.push(PC.Vehicles.makeCar(mid * PC.CELL + PC.ROAD / 2 + 22, state.city.beachTop - 330, Math.PI / 2, '#f0c14b'));
 
-    PC.UI.toast(state.toasts, 'Palm City · seven jobs on the coast', PC.PALETTE.gold);
   }
 
   // ---- shot 2: on foot -----------------------------------------------------
@@ -162,8 +161,8 @@
     const mid = Math.floor(PC.GRID / 2);
     const sx = mid * PC.CELL;                // junction centre, x
     const sy = (mid + 3) * PC.CELL;          // junction centre, y
-    place(state, sx, sy + 26, -Math.PI / 2 + 0.04);
-    state.camera.y -= 30;                    // lean the frame north, into the ambush
+    place(state, sx, sy + 16, -Math.PI / 2 + 0.04);
+    state.camera.y -= 6;                    // lean the frame north, into the ambush
 
     state.mode = 'playing';
     state.player.cash = 3480;
@@ -173,7 +172,7 @@
 
     state.wanted.stars = 3;
     state.wanted.heat = 300;
-    state.wanted.alert = 0.85;
+    state.wanted.alert = 0.42;
 
     state.missions.state = 'idle';
     state.missions.marker = null;
@@ -302,7 +301,7 @@
     state.camera.w = W;
     state.camera.h = H;
     state.shot = n;
-    state.camera.zoom = n === 1 ? 1.24 : n === 3 ? 1.62 : 1.55;
+    state.camera.zoom = n === 1 ? 1.24 : n === 3 ? 1.95 : 1.55;
     if (n === 1) cover(state);
     else if (n === 2) onFoot(state);
     else if (n === 3) police(state);
