@@ -315,10 +315,13 @@ function update(dt) {
   // Peds + traffic.
   for (const ped of world.peds) ped.update(dt, city, world);
   world.traffic.update(dt);
-  world.cars.push(...world.traffic.cars.splice(0));
-  // Keep traffic cars in the same pool as parked cars, so stealing one is the same act.
-  world.traffic.cars = world.cars.filter((c) => c.driver === 'traffic');
-  harvestTraffic();
+  // Traffic cars and parked cars share one pool, so stealing either is the same act.
+  // Sync both ways: traffic that spawned joins the pool, traffic that drove off the map
+  // leaves it. Pushing the whole traffic list every frame used to duplicate the pool
+  // endlessly, which buried the frame rate.
+  const liveTraffic = new Set(world.traffic.cars);
+  world.cars = world.cars.filter((c) => c.driver !== 'traffic' || liveTraffic.has(c));
+  for (const car of world.traffic.cars) if (!world.cars.includes(car)) world.cars.push(car);
   resolveCarCollisions(world.cars, effects);
 
   // Police.
@@ -376,13 +379,6 @@ function updateDriving(dt) {
   }
   // Driving badly near people scares them.
   if (Math.abs(car.speed) > 300) scarePeds(world.peds, car.x, car.y, 180);
-}
-
-// Traffic cars that were stolen must stop being traffic, and the pool must stay in sync.
-function harvestTraffic() {
-  for (const car of world.cars) {
-    if (car.driver === 'traffic' && !world.traffic.cars.includes(car)) world.traffic.cars.push(car);
-  }
 }
 
 function aimAngle() {
