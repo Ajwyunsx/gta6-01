@@ -73,8 +73,9 @@ export function applyShot(world, index) {
     // On foot: the sidewalk in front of the Coral Room, the delivery marker glowing over
     // the door, pedestrians about, cash on the ground. The whole first job in one frame.
     const door = { x: ROAD_X[1] + 360, y: ROAD_Y[1] - 250 };
-    p.x = door.x + 40;
-    p.y = door.y + 158;
+    const stand = safePoint(city, door.x + 54, door.y + 96);
+    p.x = stand.x;
+    p.y = stand.y;
     p.heading = -Math.PI / 2;
     p.aim = -Math.PI / 2 + 0.16;
     p.money = 620;
@@ -98,7 +99,7 @@ export function applyShot(world, index) {
       [p.x + 470, p.y + 96, 0, '#8a7bd8'],
     ]);
     world.hint = 'WASD to walk  ·  SHIFT to sprint  ·  click to fire';
-    return { offset: { x: -30, y: -34 }, zoom: 1.6, lockCamera: true };
+    return { offset: { x: 4, y: 30 }, zoom: 2.15, lockCamera: true };
   }
 
   if (n === 3) {
