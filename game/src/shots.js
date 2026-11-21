@@ -94,7 +94,9 @@ export function applyShot(world, index) {
       [spot.x + 210, spot.y + spot.h + 74, 0, '#c8556f'],
     ]);
     world.hint = 'WASD to walk  ·  SHIFT to sprint  ·  click to fire';
-    return { offset: { x: 0, y: -40 }, zoom: 1.5, lockCamera: true };
+    // Negative y pushes the camera up so the player sits low in the frame, clear of the
+    // hint bar and dialogue box instead of buried under them.
+    return { offset: { x: -160, y: -145 }, zoom: 1.5, lockCamera: true };
   }
 
   if (n === 3) {
