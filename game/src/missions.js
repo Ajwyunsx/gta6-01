@@ -1,370 +1,244 @@
-// missions.js — the story of Palm City, told in seven jobs. Each job has a giver standing at
-// a marker, a briefing card, an objective the HUD can show, and a payout. The chain is linear:
-// finish one and the next marker lights up somewhere across town.
-(function () {
+// Palm City — the story: seven jobs that take you from a borrowed car to the top of the
+// coast, each with a briefing, a marker, and a payout.
+//
+// The chain is deliberately simple to read: every job has a briefing, an objective the
+// world checks each step, and a reward. Missions are declarative data plus a small
+// updater per job.
+(function (global) {
   'use strict';
-  var PC = window.PC;
-  var CFG = PC.CFG;
-  var U = PC.U;
 
-  var JOBS = [
+  const PC = global.PC;
+
+  /**
+   * The jobs. `anchor` names a city anchor the marker sits on, `objective` says what the
+   * player must do, and `reward` is the cash on completion.
+   */
+  const JOBS = [
     {
-      id: 'rent',
-      title: 'Rent Is Due',
-      giver: 'Rosa at the Sandbox Diner',
-      where: 'diner',
-      brief:
-        'Rosa has kept your tab open for three months and she is done being nice. ' +
-        'Her ex left a duffel in a lock-up on Neon Pike. Bring it back and the tab is square.',
-      objective: 'Drive to the lock-up on Neon Pike and collect the duffel',
-      target: 'depot',
-      need: 'reach',
-      payout: 380,
-      outro: 'Rosa counts the cash twice, sighs, and pushes a plate of fries at you. "You eat. You look like a ghost."',
+      id: 'first-light',
+      title: 'First Light',
+      contact: 'Rook',
+      reward: 250,
+      anchor: 'garage',
+      briefing:
+        'Rook leans on the roller door of Rustline Garage with a coffee he did not pay for. "You want work. Fine. My cousin left a car at Coral Pier and the tide is coming in. Bring it back before the salt takes it. Do not scratch it. Do not get cute with the police."',
+      objective: 'Steal the car at Coral Pier and drive it to Rustline Garage.',
+      hint: 'Find the yellow marker at Coral Pier, get in the car, and drive it back.',
     },
     {
-      id: 'pawn',
-      title: 'The Pawn Ticket',
-      giver: 'Marco at Pelican Pawn',
-      where: 'pawn',
-      brief:
-        'Marco bought a watch he should not have bought. The seller wants it back, and he is ' +
-        'bringing friends. Stand in front of the counter until they lose their nerve.',
-      objective: 'Hold the pawn shop on Banyan Row against the collectors',
-      target: 'pawn',
-      need: 'defend',
-      wave: 3,
-      payout: 520,
-      outro: '"You are hired," Marco says, and immediately looks like he regrets saying it.',
+      id: 'counter-service',
+      title: 'Counter Service',
+      contact: 'Rook',
+      reward: 400,
+      anchor: 'bank',
+      briefing:
+        '"Sunstate Bank, corner of Fifth. They count the takings at four. I want the drawer, not the vault, not a hostage, not a headline. In and out before the guard finishes his coffee."',
+      objective: 'Rob Sunstate Bank: reach the counter, take the cash, and get clear.',
+      hint: 'Walk into the marker at Sunstate Bank, then leave the block before the heat settles.',
     },
     {
-      id: 'marina',
-      title: 'Low Tide',
-      giver: 'Ines on the boardwalk',
-      where: 'marina',
-      brief:
-        'Ines runs the marina office and someone has been cutting moorings at night. ' +
-        'Her boat is next. Sit on the dock until the cutter shows up, then make him regret it.',
-      objective: 'Patrol the marina docks — find whoever is cutting the lines',
-      target: 'marina',
-      need: 'defend',
-      wave: 4,
-      payout: 640,
-      outro: 'Ines hands you a key on a cork float. "Berth nine. Do not tell anyone I gave you this."',
+      id: 'night-shift',
+      title: 'Night Shift',
+      contact: 'Marisol',
+      reward: 650,
+      anchor: 'docks',
+      briefing:
+        'Marisol does not look up from her phone. "North Docks, container row nine. A crate with my name on it is sitting where it should not be. Two men will tell you it is theirs. They are lying. I do not care how you settle it, only that the crate moves."',
+      objective: 'Clear the docks and secure the crate at North Docks.',
+      hint: 'The marker is the container. Whoever is standing on it is in your way.',
     },
     {
-      id: 'arcade',
-      title: 'High Score',
-      giver: 'Dex at Sunset Arcade',
-      where: 'arcade',
-      brief:
-        'Dex skims the arcade machines for a crew that does not exist on paper. Tonight the ' +
-        'pickup goes wrong and the money walks. Chase the runner down Sunset Strip before he reaches the bridge.',
-      objective: 'Chase down the runner before he reaches the bridge',
-      target: 'bridge',
-      need: 'chase',
-      payout: 760,
-      outro: 'Dex splits the take without being asked. "You are faster than you look. That is a compliment."',
+      id: 'the-tip',
+      title: 'The Tip',
+      contact: 'Marisol',
+      reward: 800,
+      anchor: 'club',
+      briefing:
+        '"Somebody at the Neon Flamingo is selling my routes to the coast patrol. I want a name, and I want it before midnight. Go in, ask nicely, then stop asking nicely."',
+      objective: 'Find the informant at the Neon Flamingo Club and take him down.',
+      hint: 'The informant wears a pale jacket and does not run until you get close.',
     },
     {
-      id: 'hotel',
-      title: 'Room 402',
-      giver: 'Nadia at the Heron Hotel',
-      where: 'hotel',
-      brief:
-        'Nadia has a guest in 402 who pays in envelopes and never opens the curtains. ' +
-        'She wants him gone before the convention crowd arrives. He will not go quietly.',
-      objective: 'Clear room 402 at the Heron Hotel',
-      target: 'hotel',
-      need: 'defend',
-      wave: 5,
-      payout: 900,
-      outro: 'Nadia takes the envelope, tucks it into her jacket, and books you a room for the night. "On the house."',
+      id: 'sound-check',
+      title: 'Sound Check',
+      contact: 'Dez',
+      reward: 1100,
+      anchor: 'studio',
+      briefing:
+        'Dez has three gold records and one unpaid debt. "Waveform Studios, the big room. A man is coming to collect a tape that is not his. Make sure the tape stays, and make sure he does not come back for it."',
+      objective: 'Defend Waveform Studios: stop the collector and keep the tape.',
+      hint: 'Two cars will arrive. Hold the marker until the last of them is down.',
     },
     {
-      id: 'club',
+      id: 'high-water',
+      title: 'High Water',
+      contact: 'Dez',
+      reward: 1500,
+      anchor: 'villa',
+      briefing:
+        '"Casa Marbella, the house on the hill with the white wall. The man who lives there bought my catalogue for a dollar and a threat. Go up, take the ledger off his desk, and do not use the front door."',
+      objective: 'Break into Casa Marbella and take the ledger.',
+      hint: 'The ledger is on the desk inside the marker. Getting out is the hard part.',
+    },
+    {
+      id: 'last-call',
       title: 'Last Call',
-      giver: 'Bram at the Sandbar Club',
-      where: 'club',
-      brief:
-        'Bram owes the wrong people a favour and they have come to collect it at closing time. ' +
-        'Get everyone out, keep the bar standing, and do not let them take the register.',
-      objective: 'Defend the Sandbar Club until closing time',
-      target: 'club',
-      need: 'defend',
-      wave: 6,
-      payout: 1150,
-      outro: 'Bram pours two glasses of something expensive and slides one across the bar. "Same time next month?"',
-    },
-    {
-      id: 'harbour',
-      title: 'The Long Pier',
-      giver: 'Ines, by radio',
-      where: 'marina',
-      brief:
-        'Every thread leads to the harbour depot: the watch, the moorings, the envelopes. ' +
-        'Whoever is running it is loading a container tonight. Go and end this.',
-      objective: 'Take the harbour depot and end it',
-      target: 'depot',
-      need: 'defend',
-      wave: 8,
-      payout: 2400,
-      finale: true,
-      outro:
-        'The container is full of nothing but old chairs. Somebody has been laughing at all of you for months. ' +
-        'Ines is quiet on the radio for a long moment. "Well," she says. "At least the city is ours now."',
+      contact: 'Rook',
+      reward: 3000,
+      anchor: 'pier',
+      briefing:
+        'Rook is waiting at the end of Coral Pier with the wind in his collar. "This is the one. Every dollar we moved this month is on that boat, and the coast patrol is going to take it at dawn unless somebody persuades them otherwise. You have been the somebody all along. Bring it home."',
+      objective: 'Hold Coral Pier against the coast patrol until the boat clears.',
+      hint: 'Survive the assault at the pier. The clock on the HUD is the boat.',
     },
   ];
 
-  function Missions(world) {
-    this.world = world;
-    this.jobs = JOBS;
-    this.index = 0;
-    this.state = 'idle';       // idle | offered | active | done | complete
-    this.timer = 0;
-    this.kills = 0;
-    this.waveLeft = 0;
-    this.waveClock = 0;
-    this.targetCar = null;
-    this.briefing = null;
-    this.bannerClock = 0;
-    this.lastResult = null;
-    this.spawned = [];
-    this.hint = '';
+  function makeMissions(city) {
+    return {
+      jobs: JOBS,
+      index: 0,
+      state: 'idle',           // idle | briefing | active | complete | failed
+      marker: null,
+      timer: 0,
+      progress: 0,
+      targets: [],
+      saved: 0,
+      story: {
+        completed: [],
+        lastResult: null,
+      },
+      city,
+    };
   }
 
-  Missions.prototype.current = function () {
-    return this.jobs[Math.min(this.index, this.jobs.length - 1)];
-  };
+  /** The job the player is on, or the last one when the chain is finished. */
+  function current(m) {
+    return m.jobs[Math.min(m.index, m.jobs.length - 1)];
+  }
 
-  Missions.prototype.markerPos = function () {
-    var job = this.current();
-    if (!job) return null;
-    var m = this.world.city.markers[job.where];
-    if (!m) return null;
-    return m;
-  };
+  function anchorOf(city, id) {
+    return city.anchors.find((a) => a.id === id) || city.anchors[0];
+  }
 
-  Missions.prototype.objectivePos = function () {
-    var job = this.current();
-    if (!job || this.state !== 'active') return null;
-    var city = this.world.city;
-    if (job.need === 'chase' && this.targetCar) return { x: this.targetCar.x, y: this.targetCar.y };
-    var t = city.markers[job.target] || city.markers[job.where];
-    return t;
-  };
+  /** Start the current job: set the marker and the state the world watches. */
+  function begin(m, city) {
+    const job = current(m);
+    const anchor = anchorOf(city, job.anchor);
+    m.state = 'active';
+    m.timer = 0;
+    m.progress = 0;
+    m.targets = [];
+    m.marker = { x: anchor.x, y: anchor.y, r: 44, label: job.title };
 
-  Missions.prototype.update = function (dt) {
-    var world = this.world;
-    var player = world.player;
-    if (this.bannerClock > 0) this.bannerClock -= dt;
-
-    // the briefing card waits for the player to press E or walk away
-    if (this.state === 'offered') {
-      if (this.briefing && this.briefing.autoIn !== undefined) {
-        this.briefing.autoIn -= dt;
-        if (this.briefing.autoIn <= 0) this.begin();
+    switch (job.id) {
+      case 'first-light': {
+        // The car waits on the pier; the marker follows it once the player is driving.
+        m.targets = [];
+        m.phase = 'fetch';
+        break;
       }
-      return;
+      case 'counter-service':
+        m.phase = 'rob';
+        break;
+      case 'night-shift':
+        m.phase = 'clear';
+        m.targets = [0, 1];
+        break;
+      default:
+        m.phase = 'reach';
     }
-    if (this.state === 'idle') {
-      var mk = this.markerPos();
-      if (mk && U.dist(mk.x, mk.y, player.x, player.y) < 46 && !player.inCar) {
-        this.offer();
-      }
-      return;
-    }
-    if (this.state !== 'active') return;
+    return job;
+  }
 
-    var job = this.current();
-    this.timer += dt;
+  /** Complete the current job and pay out. */
+  function complete(m, player, onDone) {
+    const job = current(m);
+    m.state = 'complete';
+    m.marker = null;
+    m.story.completed.push(job.id);
+    m.story.lastResult = job;
+    player.cash += job.reward;
+    m.index = Math.min(m.index + 1, m.jobs.length);
+    if (onDone) onDone(job);
+  }
 
-    if (job.need === 'reach') {
-      var tgt = world.city.markers[job.target];
-      if (tgt && U.dist(tgt.x, tgt.y, player.x, player.y) < 70) {
-        this.complete();
-      }
-      return;
-    }
+  /**
+   * Per-step mission logic. Kept small and explicit: each job reads the world and decides
+   * whether its objective is met.
+   */
+  function update(m, state, dt) {
+    if (m.state !== 'active') return;
+    const { player, city } = state;
+    m.timer += dt;
+    const job = current(m);
 
-    if (job.need === 'chase') {
-      if (!this.targetCar) this.spawnRunner();
-      if (this.targetCar) {
-        var d = U.dist(this.targetCar.x, this.targetCar.y, player.x, player.y);
-        var bridge = world.city.markers.bridge;
-        if (bridge && U.dist(this.targetCar.x, this.targetCar.y, bridge.x, bridge.y) < 90) {
-          this.fail('The runner reached the bridge and vanished into traffic.');
-          return;
+    if (job.id === 'first-light') {
+      if (m.phase === 'fetch') {
+        const car = state.missionCar;
+        if (car && player.inCar === car) {
+          m.phase = 'deliver';
+          const garage = anchorOf(city, 'garage');
+          m.marker = { x: garage.x, y: garage.y, r: 52, label: 'Rustline Garage' };
         }
-        if (d < 70 || this.targetCar.health <= 0) {
-          this.complete();
-          return;
-        }
-        if (d > 2400) {
-          // keep the chase honest: the runner waits at the light for you
-          this.targetCar.vx *= 0.4;
-          this.targetCar.vy *= 0.4;
+      } else if (m.phase === 'deliver') {
+        const garage = anchorOf(city, 'garage');
+        if (player.inCar && PC.dist(player.x, player.y, garage.x, garage.y) < 60) {
+          complete(m, player, state.onMissionDone);
         }
       }
       return;
     }
 
-    if (job.need === 'defend') {
-      this.updateDefend(dt, job);
-      return;
-    }
-  };
+    if (!m.marker) return;
+    const inMarker = PC.dist(player.x, player.y, m.marker.x, m.marker.y) < m.marker.r;
 
-  // ---- defend jobs -----------------------------------------------------------
-  Missions.prototype.updateDefend = function (dt, job) {
-    var world = this.world;
-    var player = world.player;
-    var site = world.city.markers[job.target] || world.city.markers[job.where];
-    this.waveClock -= dt;
+    switch (job.id) {
+      case 'counter-service':
+        if (m.phase === 'rob' && inMarker && !player.inCar) {
+          m.phase = 'escape';
+          m.timer = 0;
+          player.cash += 320;
+          state.onCrime?.(55, 'armed robbery');
+          m.marker = null;
+        } else if (m.phase === 'escape' && m.timer > 6) {
+          complete(m, player, state.onMissionDone);
+        }
+        break;
 
-    if (this.waveLeft <= 0 && this.kills < job.wave) {
-      if (this.waveClock <= 0) {
-        this.spawnAttacker(site, job);
-        this.waveLeft--;
-        this.waveClock = U.randRange(world.rng, 1.4, 2.6);
+      case 'night-shift':
+      case 'the-tip':
+      case 'sound-check':
+      case 'high-water':
+        // Combat jobs: cleared when the marker is reached with no live targets near it.
+        if (inMarker) {
+          const liveNear = state.hostiles.filter(
+            (h) => !h.dead && PC.dist(h.x, h.y, m.marker.x, m.marker.y) < 260,
+          ).length;
+          m.progress = Math.max(m.progress, liveNear === 0 ? 1 : 0);
+          if (liveNear === 0) {
+            m.holdTimer = (m.holdTimer || 0) + dt;
+            if (m.holdTimer > 2.4) complete(m, player, state.onMissionDone);
+          } else {
+            m.holdTimer = 0;
+          }
+        }
+        break;
+
+      case 'last-call': {
+        m.waveTimer = (m.waveTimer || 0) - dt;
+        if (m.waveTimer <= 0 && m.timer < 95) {
+          const angle = Math.random() * Math.PI * 2;
+          state.spawnRaid(
+            m.marker.x + Math.cos(angle) * 420,
+            m.marker.y + Math.sin(angle) * 420,
+          );
+          m.waveTimer = 9;
+        }
+        if (m.timer > 95) complete(m, player, state.onMissionDone);
+        break;
       }
     }
-    // any live attacker close to the site is a threat the HUD mentions
-    var threats = 0;
-    for (var k = 0; k < world.hostiles.length; k++) {
-      if (world.hostiles[k].alive) threats++;
-    }
-    if (threats === 0 && this.kills >= job.wave) {
-      this.complete();
-      return;
-    }
-    // wandering too far off the site abandons the fight
-    if (site && U.dist(site.x, site.y, player.x, player.y) > 1400) {
-      this.fail('You left the site. The job fell apart without you.');
-    }
-  };
+  }
 
-  Missions.prototype.spawnAttacker = function (site, job) {
-    var world = this.world;
-    var rng = world.rng;
-    for (var tries = 0; tries < 18; tries++) {
-      var ang = rng() * 6.28;
-      var dist = U.randRange(rng, 300, 520);
-      var x = U.clamp(site.x + Math.cos(ang) * dist, 30, CFG.CITY_W - 30);
-      var y = U.clamp(site.y + Math.sin(ang) * dist, 30, CFG.CITY_H - 30);
-      if (world.city.hitBuilding(x, y, 16)) continue;
-      world.spawnHostile(x, y, job.finale ? 1.3 : 1);
-      return;
-    }
-  };
-
-  // ---- flow ------------------------------------------------------------------
-  Missions.prototype.offer = function () {
-    var job = this.current();
-    this.state = 'offered';
-    this.briefing = { job: job, t: 0, autoIn: undefined };
-    this.world.audio.missionPing();
-    this.world.hud.banner('JOB: ' + job.title.toUpperCase(), job.giver);
-  };
-
-  Missions.prototype.begin = function () {
-    var job = this.current();
-    this.state = 'active';
-    this.timer = 0;
-    this.kills = 0;
-    this.waveLeft = 0;
-    this.waveClock = 0.8;
-    this.briefing = null;
-    this.spawned.length = 0;
-    this.world.hostiles.length = 0;
-    if (job.need === 'chase') this.spawnRunner();
-    this.world.hud.banner(job.title.toUpperCase(), job.objective);
-    this.world.audio.missionStart();
-  };
-
-  Missions.prototype.spawnRunner = function () {
-    var world = this.world;
-    var city = world.city;
-    var job = this.current();
-    var start = city.markers[job.where];
-    var startCar = new PC.Car(start.x + 60, start.y + 40, 0, {
-      name: 'Courier Coupe', body: '#e7dac0', trim: '#2a2630',
-      len: 92, wid: 46, top: 620, accel: 720, handling: 1.05, seats: 2,
-    }, world.rng);
-    startCar.driver = 'runner';
-    world.cars.list.push(startCar);
-    this.targetCar = startCar;
-    // head for the bridge marker at speed
-    var bridge = city.markers.bridge || { x: CFG.CITY_W, y: CFG.CITY_H };
-    startCar.angle = Math.atan2(bridge.y - startCar.y, bridge.x - startCar.x);
-    startCar.vx = Math.cos(startCar.angle) * 300;
-    startCar.vy = Math.sin(startCar.angle) * 300;
-    // the runner is its own little chase system, in world.js
-    world.runner = { car: startCar, target: bridge, loot: true };
-  };
-
-  Missions.prototype.complete = function () {
-    var job = this.current();
-    var world = this.world;
-    this.state = 'done';
-    this.lastResult = { ok: true, job: job, timer: this.timer };
-    world.player.cash += job.payout;
-    world.stats.cash += job.payout;
-    world.stats.jobs++;
-    this.index++;
-    this.targetCar = null;
-    world.runner = null;
-    world.hostiles.length = 0;
-    world.audio.missionComplete();
-    world.hud.banner('JOB COMPLETE', U.money(job.payout) + ' paid — ' + job.outro);
-    if (this.index >= this.jobs.length) {
-      this.state = 'complete';
-      world.hud.banner('PALM CITY IS YOURS', 'Seven jobs. One city. Nothing left to prove.');
-    } else {
-      this.state = 'idle';
-      this.briefing = null;
-    }
-    world.save();
-  };
-
-  Missions.prototype.fail = function (reason) {
-    var world = this.world;
-    this.state = 'idle';
-    this.lastResult = { ok: false, reason: reason };
-    this.targetCar = null;
-    world.runner = null;
-    world.hostiles.length = 0;
-    world.hud.banner('JOB FAILED', reason);
-    world.audio.missionFail();
-  };
-
-  Missions.prototype.onHostileDown = function () {
-    this.kills++;
-    this.waveLeft = 0;
-  };
-
-  Missions.prototype.reset = function () {
-    this.index = 0;
-    this.state = 'idle';
-    this.briefing = null;
-    this.targetCar = null;
-    this.world.runner = null;
-  };
-
-  Missions.prototype.hudObjective = function () {
-    if (this.state === 'active') {
-      var job = this.current();
-      if (job.need === 'defend') return job.objective + ' (' + Math.min(this.kills, job.wave) + '/' + job.wave + ')';
-      return job.objective;
-    }
-    if (this.state === 'idle' && this.index < this.jobs.length) {
-      var m = this.markerPos();
-      return 'Next job: ' + this.current().title + (m ? ' — ' + m.name : '');
-    }
-    if (this.state === 'complete') return 'All seven jobs complete';
-    return '';
-  };
-
-  PC.Missions = Missions;
-  PC.JOBS = JOBS;
-})();
+  PC.Missions = { makeMissions, current, begin, update, complete, anchorOf, JOBS };
+})(window);
