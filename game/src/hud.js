@@ -196,7 +196,8 @@
     if (missions.state === 'active' || missions.state === 'idle') {
       ctx.textAlign = 'center';
       ctx.font = '600 13px "Inter", "Segoe UI", system-ui, sans-serif';
-      const text = missions.state === 'active' ? job.objective : 'Find the gold marker to start a job';
+      // A staged scene may override the objective line (shots.js sets state.hint).
+      const text = state.hint || (missions.state === 'active' ? job.objective : 'Find the gold marker to start a job');
       const w = ctx.measureText(text).width + 40;
       ctx.fillStyle = 'rgba(10,12,18,0.62)';
       ctx.fillRect(W / 2 - w / 2, 18, w, 34);
