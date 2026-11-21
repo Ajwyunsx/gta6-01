@@ -94,54 +94,47 @@
   // 2 — ON FOOT. Mid-pavement in a shop block, pedestrians all round, the job marker ahead.
   SCENES[2] = function (world) {
     clearTraffic(world);
-    // On foot on the sand behind the boardwalk: umbrellas, loungers, palms, a crowd
-    // walking the strip, and the avenue's tail lights just behind him.
-    var wx = CFG.SAND_X + 118;
-    var wy = 1996;
-
-    var grove = [
-      [-46, -212, 1.22], [116, -150, 1.05], [148, 196, 1.30], [-58, 158, 1.10],
-      [276, 30, 1.00], [246, -262, 1.14]
-    ];
-    for (var g = 0; g < grove.length; g++) {
-      world.city.palms.push({ x: wx + grove[g][0], y: wy + grove[g][1], s: grove[g][2], rot: g * 1.1 });
-    }
-    world.city.props.push({ type: 'umbrella', x: wx + 168, y: wy - 116, rot: 0.35, color: CFG.colors.neon[0] });
-    world.city.props.push({ type: 'umbrella', x: wx + 96, y: wy + 176, rot: -0.42, color: CFG.colors.neon[1] });
-    world.city.props.push({ type: 'lounger', x: wx + 132, y: wy - 78, rot: 0.30 });
-    world.city.props.push({ type: 'lounger', x: wx + 62, y: wy + 138, rot: -0.34 });
+    // On foot in the middle of a downtown crossing: he is walking east across the paint, a
+    // queue of cars waits at the light, the crowd crosses with him, towers lean overhead.
+    var ix = CFG.CELL * 4 + CFG.ROAD / 2;   // the crossroads centre line, both ways
+    var wx = ix - 34;
+    var wy = ix + 26;
 
     world.player.inCar = null;
     world.player.x = wx;
     world.player.y = wy;
-    world.player.angle = -2.30;
-    world.player.vx = -56;
-    world.player.vy = -14;
-    world.player.stride = 3.0;
-    world.player.health = 82;
-    world.player.armour = 48;
+    world.player.angle = 0.02;
+    world.player.vx = 62;
+    world.player.vy = 6;
+    world.player.stride = 3.2;
+    world.player.health = 78;
+    world.player.armour = 44;
     world.aiming = false;
 
     var mates = [
-      [wx + 92, wy - 84, 2.6], [wx - 96, wy + 96, 2.1], [wx + 132, wy + 52, 2.5],
-      [wx - 34, wy - 152, 1.9], [wx + 58, wy + 172, 2.4], [wx + 186, wy - 224, 1.7]
+      [wx + 96, wy + 22, 0.1], [wx - 74, wy - 26, 3.1], [wx + 168, wy - 8, 2.9],
+      [wx + 42, wy - 96, 1.6], [ix - 150, ix + 128, -0.4], [ix + 132, ix + 116, 2.6]
     ];
     for (var m = 0; m < mates.length; m++) {
       var ped = world.peds.spawnAt(mates[m][0], mates[m][1]);
       if (ped) ped.angle = mates[m][2];
     }
-    propCar(world, AVENUE - 26, wy - 208, -Math.PI / 2, 0);
-    propCar(world, AVENUE - 26, wy + 148, -Math.PI / 2, 6);
-    propCar(world, AVENUE + 30, wy + 18, Math.PI / 2, 3);
+    // traffic held at the light: two lanes coming north, two going south
+    propCar(world, ix - 26, ix + 200, -Math.PI / 2, 2);
+    propCar(world, ix + 26, ix + 268, Math.PI / 2, 5);
+    propCar(world, ix - 26, ix - 172, -Math.PI / 2, 1);
+    propCar(world, ix + 26, ix - 236, Math.PI / 2, 6);
+    propCar(world, ix + 210, ix - 26, Math.PI, 3);
+    propCar(world, ix - 208, ix + 26, 0, 0);
     world.police.stars = 0;
     world.police.units.length = 0;
-    world.shotCam = { x: wx + 62, y: wy - 44, zoom: 2.86 };
-    world.camera.zoom = 2.86;
-    world.camera.x = wx + 62;
-    world.camera.y = wy - 44;
-    world.hud.banner('ON FOOT', 'The boardwalk — sand on one side, the strip on the other');
+    world.shotCam = { x: wx + 46, y: wy + 16, zoom: 1.92 };
+    world.camera.zoom = 1.92;
+    world.camera.x = wx + 46;
+    world.camera.y = wy + 16;
+    world.hud.banner('ON FOOT', 'Downtown crossing — the strip on a Friday night');
     return true;
-  };  SCENES[3] = function (world) {
+  }; SCENES[3] = function (world) {
     clearTraffic(world);
     // The bust: the player's coupe is stopped in the eastbound lane with a cruiser pulled up
     // nose-to-nose in front and a second one blocking behind. A third is slewing in across
