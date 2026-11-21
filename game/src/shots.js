@@ -72,7 +72,7 @@ export function applyShot(world, index) {
     world.traffic.target = 0;
     // No tutorial hint on the cover: it lands dead centre and cuts the hero car in half.
     world.hint = '';
-    return { offset: { x: -10, y: 6 }, zoom: 1.2, stageSpeed: 330, lockCamera: true };
+    return { offset: { x: 0, y: -124 }, zoom: 1.26, stageSpeed: 330, lockCamera: true };
   }
 
   if (n === 2) {
