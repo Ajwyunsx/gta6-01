@@ -1,61 +1,98 @@
-// Every tuning number and colour in one place. The playfield is a fixed 1280x720 logical area;
-// the renderer scales it to the window, so no rule below depends on the screen size.
+// config.js — palm city's tuning numbers and palette in one place.
+// Everything the game measures (speeds, sizes, colours) is named here so city.js,
+// render.js and the HUD all agree on one set of values.
 
-export const FIELD = { width: 1280, height: 720, groundY: 664 };
+export const WORLD = {
+  width: 6000,
+  height: 3800,
+  beachX: 5000, // sand starts here on the east
+  sandEndX: 5360, // sea starts here on the east
+  beachY: 3240, // sand starts here in the south
+  sandEndY: 3540, // sea starts here in the south
+};
 
-/** The simulation's fixed step, in seconds: 60 updates a second whatever the display's rate. */
-export const STEP = 1 / 60;
+export const GRID = {
+  x0: 260,
+  y0: 200,
+  dx: 780,
+  dy: 680,
+  cols: 6,
+  rows: 4,
+  road: 104,
+  walk: 18,
+};
+
+export const ROAD_X = [];
+export const ROAD_Y = [];
+for (let i = 0; i <= GRID.cols; i++) ROAD_X.push(GRID.x0 + i * GRID.dx);
+for (let j = 0; j <= GRID.rows; j++) ROAD_Y.push(GRID.y0 + j * GRID.dy);
 
 export const PLAYER = {
-  width: 72,
-  height: 24,
-  speed: 560,
-  invulnerable: 1.5,
+  walk: 172,
+  sprint: 258,
+  radius: 11,
+  health: 100,
+  armor: 100,
+  fireDelay: 0.15,
+  bulletSpeed: 1080,
 };
 
-export const LIVES = 3;
-
-export const BLOCK = {
-  minWidth: 40,
-  maxWidth: 110,
-  height: 36,
-  speed: 240,
-  speedPerLevel: 30,
-  speedJitter: 90,
-  interval: 0.55,
-  intervalScale: 0.88,
-  minInterval: 0.14,
-  dodgePoints: 1,
+export const CAR = {
+  accel: 360,
+  brake: 760,
+  maxSpeed: 640,
+  reverse: 200,
+  turnRate: 3.0,
+  grip: 9.5,
+  driftGrip: 2.2,
+  drag: 0.55,
 };
 
-export const COIN = {
-  size: 24,
-  speed: 190,
-  speedPerLevel: 14,
-  interval: 1.4,
-  intervalJitter: 0.8,
-  points: 10,
+export const PED = {
+  walk: 46,
+  run: 130,
+  radius: 10,
+  count: 26,
 };
 
-/** Seconds of play per level, and the last level: speeds and spawn rates stop growing there. */
-export const LEVEL = { seconds: 12, max: 12 };
-
-/** How many falling things can exist at once; the pool is allocated once, at boot. */
-export const POOL_SIZE = 64;
-
-export const PALETTE = {
-  backdrop: '#11141b',
-  sky: '#1b1f2a',
-  ground: '#2a3040',
-  player: '#4fc3f7',
-  block: '#e5534b',
-  coin: '#f2c94c',
-  panel: '#252b38',
-  text: '#eef1f5',
-  muted: '#8b93a3',
+export const WANTED = {
+  maxStars: 5,
+  coolTime: 8.5, // seconds out of sight before a star drops
+  spawnDelay: 3.2,
 };
 
-export const FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+export const COLORS = {
+  void: '#0d0c14',
+  asphalt: '#1a1924',
+  asphaltLight: '#211f2c',
+  lane: '#8a7f92',
+  walk: '#2e2b3b',
+  walkEdge: '#3b3749',
+  curb: '#4a4459',
+  grass: '#22352f',
+  grassLight: '#2b4438',
+  sand: '#4a3b3f',
+  sandLight: '#5b4849',
+  water: '#0f2b37',
+  waterDeep: '#0a1f2b',
+  pink: '#ff5f9e',
+  hotPink: '#ff2f7d',
+  teal: '#4fe3cd',
+  tealDim: '#2a9c92',
+  amber: '#ffc061',
+  warm: '#ffd9a3',
+  sun: '#ff8f5e',
+  purple: '#7a5cff',
+  red: '#ff4257',
+  blue: '#4f8bff',
+  white: '#f2ecf5',
+  money: '#7ff08a',
+};
 
-/** Where the best score is kept between visits (this browser only). */
-export const BEST_KEY = 'block-dodger.best';
+export const UI = {
+  money: '#8ef2a0',
+  health: '#ff4f66',
+  armor: '#54c8ff',
+  star: '#ffcf4d',
+  dim: '#6d6478',
+};
