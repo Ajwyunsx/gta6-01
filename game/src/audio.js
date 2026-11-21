@@ -36,6 +36,12 @@ export class Sound {
     if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
   }
 
+  // True only when sound can actually be heard. A context that the browser has not
+  // unlocked (no gesture yet) is left alone, so no silent node graph is built.
+  get live() {
+    return !!this.ctx && this.ctx.state === 'running' && !this.muted;
+  }
+
   setMuted(muted) {
     this.muted = muted;
     this.ensure();
@@ -54,7 +60,7 @@ export class Sound {
 
   gunshot(volume = 1) {
     this.ensure();
-    if (!this.ctx || this.muted) return;
+    if (!this.live) return;
     const t = this.ctx.currentTime;
     const src = this.ctx.createBufferSource();
     src.buffer = this.noiseBuffer(0.12);
@@ -82,7 +88,7 @@ export class Sound {
 
   pickup(kind = 'cash') {
     this.ensure();
-    if (!this.ctx || this.muted) return;
+    if (!this.live) return;
     const t = this.ctx.currentTime;
     const freqs = kind === 'cash' ? [660, 990] : kind === 'health' ? [520, 780] : [440, 660];
     freqs.forEach((f, i) => {
@@ -101,7 +107,7 @@ export class Sound {
 
   missionChime() {
     this.ensure();
-    if (!this.ctx || this.muted) return;
+    if (!this.live) return;
     const t = this.ctx.currentTime;
     [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
       const osc = this.ctx.createOscillator();
@@ -119,7 +125,7 @@ export class Sound {
 
   explosion() {
     this.ensure();
-    if (!this.ctx || this.muted) return;
+    if (!this.live) return;
     const t = this.ctx.currentTime;
     const src = this.ctx.createBufferSource();
     src.buffer = this.noiseBuffer(0.7);
@@ -137,7 +143,7 @@ export class Sound {
 
   horn() {
     this.ensure();
-    if (!this.ctx || this.muted) return;
+    if (!this.live) return;
     const t = this.ctx.currentTime;
     for (const f of [392, 466]) {
       const osc = this.ctx.createOscillator();
@@ -154,7 +160,7 @@ export class Sound {
 
   crash(strength = 1) {
     this.ensure();
-    if (!this.ctx || this.muted) return;
+    if (!this.live) return;
     const t = this.ctx.currentTime;
     const src = this.ctx.createBufferSource();
     src.buffer = this.noiseBuffer(0.2);
@@ -238,7 +244,7 @@ export class Sound {
   // A slow synthwave bed: padded chords, a bass pulse and a lazy arpeggio.
   updateMusic(dt, intensity = 0) {
     this.ensure();
-    if (!this.ctx || this.muted) return;
+    if (!this.live) return;
     this.musicTimer -= dt;
     if (this.musicTimer > 0) return;
     this.musicTimer = 0.62;

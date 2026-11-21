@@ -485,6 +485,17 @@ function drawWorldFrame() {
   effects.draw(ctx, cam);
   ctx.restore();
 
+  if (params.get('debug')) {
+    ctx.fillStyle = '#00ff88';
+    ctx.font = '700 14px monospace';
+    ctx.fillText(`p ${p.x.toFixed(0)},${p.y.toFixed(0)} car=${!!p.inCar} cam=${camera.x.toFixed(0)},${camera.y.toFixed(0)} z=${camZoom.toFixed(2)}`, 20, HEIGHT - 60);
+    ctx.strokeStyle = '#00ff88';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(WIDTH / 2, HEIGHT / 2, 30, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
   // Screen-space HUD.
   drawHud(ctx, { w: WIDTH, h: HEIGHT, world, time: clock });
 
@@ -522,11 +533,20 @@ function drawEnding(ctx, time) {
 // --- loop -------------------------------------------------------------------
 
 let last = performance.now();
+const maxFrames = Number(params.get('frames') ?? 0);
+let framesDrawn = 0;
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   update(dt);
   draw();
+  framesDrawn++;
+  // ?frames=N stops the loop after N frames, so a headless capture can take its
+  // screenshot without racing a continuously animating page.
+  if (maxFrames && framesDrawn >= maxFrames) {
+    window.__palmcityReady = true;
+    return;
+  }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
