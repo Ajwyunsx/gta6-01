@@ -373,6 +373,21 @@ function updateDriving(dt) {
   const throttle = shotConfig?.autoThrottle ?? ((input.up ? 1 : 0) - (input.down ? 1 : 0));
   const steer = (input.right ? 1 : 0) - (input.left ? 1 : 0);
   driveCar(car, { throttle, steer, handbrake: input.handbrake }, dt, city);
+  // A staged capture also fixes the cruising speed, so the frame looks the same whether
+  // the shutter fires at 0.9s or 2s after load.
+  const stageSpeed = shotConfig?.stageSpeed;
+  if (typeof stageSpeed === 'number') {
+    car.speed = stageSpeed;
+    car.vx = Math.cos(car.angle) * stageSpeed;
+    car.vy = Math.sin(car.angle) * stageSpeed;
+    // ...and holds its mark: a car that keeps driving during the load grace period ends
+    // up a block away from where the shot was composed by the time the shutter fires.
+    const anchor = car.stageAnchor;
+    if (anchor) {
+      car.x = anchor.x;
+      car.y = anchor.y;
+    }
+  }
   p.x = car.x;
   p.y = car.y;
   p.aim = car.angle;

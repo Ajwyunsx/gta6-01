@@ -25,6 +25,11 @@ export function applyShot(world, index) {
       w: 44,
       h: 88,
     });
+    // Caught at cruising speed: a still of a parked car reads as a parked car.
+    car.speed = 330;
+    car.vx = Math.cos(car.angle) * 330;
+    car.vy = Math.sin(car.angle) * 330;
+    car.stageAnchor = { x: car.x, y: car.y };
     world.cars.push(car);
     p.inCar = car;
     p.x = car.x;
@@ -40,40 +45,41 @@ export function applyShot(world, index) {
     world.missionManager.setStep(0);
     // Objective line only — the briefing box would eat half the frame in a still.
     world.missionManager.dialogueIndex = world.missionManager.dialogue.length;
-    world.combat.addPickup(avenue + 120, 1460, 'cash', 60);
-    // Own lane stays clear so the car actually rolls; the oncoming lane and the far
-    // block behind carry the traffic that makes the street read as alive.
-    // Traffic lives in the opposite lane (and one car well ahead in ours), so nothing can
-    // rear-end the hero two frames in and spin it sideways mid-capture.
+    world.combat.addPickup(avenue + 112, 1466, 'cash', 60);
+    // The hero is pinned at its mark; staged cars keep their own speed, so they're placed
+    // where they'll be ~1.15 s after load rather than where they start. Both lanes carry
+    // traffic: the avenue should read as a street in use, not a runway.
     addShotCars(world, [
-      [avenue - 30, 1720, Math.PI / 2, '#4f9fb8'],
-      [avenue - 30, 1500, Math.PI / 2, '#d8b25f'],
-      [avenue - 30, 1210, Math.PI / 2, '#c9a227'],
-      [avenue - 30, 940, Math.PI / 2, '#c8556f'],
-      [avenue + 30, 980, -Math.PI / 2, '#8a7bd8'],
-      [avenue + 30, 560, -Math.PI / 2, '#7ec8a0'],
+      // Placed where the shutter sees them, and held there: a car given a velocity for
+      // 1.15 s of load grace ends up half a block from where the shot was composed.
+      [avenue + 30, 1300, -Math.PI / 2, '#8a7bd8'],
+      [avenue - 30, 1382, Math.PI / 2, '#4f9fb8'],
+      [avenue - 30, 1620, Math.PI / 2, '#d8b25f'],
     ]);
     for (const c of world.cars) {
-      if (c.staged) c.vy = c.vy > 0 ? 210 : -240;
+      if (!c.staged) continue;
+      c.vx = 0;
+      c.vy = 0;
+      c.stageHold = true;
     }
     addShotPeds(world, [
-      [avenue + 96, 1620], [avenue + 118, 1440], [avenue - 96, 1660], [avenue + 90, 1360],
+      [avenue + 96, 1620], [avenue + 120, 1440], [avenue - 98, 1600], [avenue + 92, 1360],
     ]);
     // Ambient traffic keeps spawning on its own schedule and was parking itself on top
-    // of the hero. Keep only the staged cars, the cruisers, and anything genuinely far away.
-    world.cars = world.cars.filter((c) => c === car || c.staged
-      || Math.hypot(c.x - car.x, c.y - car.y) > 300);
+    // of the hero. Keep only the staged cars and the hero inside the frame.
+    world.cars = world.cars.filter((c) => c === car || c.staged);
     world.traffic.cars = world.cars.filter((c) => c.driver === 'traffic');
     world.traffic.target = 0;
-    world.hint = 'W  — accelerate  ·  A/D — steer  ·  E — get out';
-    return { offset: { x: 0, y: -30 }, zoom: 1.0, autoThrottle: 1, lockCamera: true };
+    // No tutorial hint on the cover: it lands dead centre and cuts the hero car in half.
+    world.hint = '';
+    return { offset: { x: -10, y: 6 }, zoom: 1.2, stageSpeed: 330, lockCamera: true };
   }
 
   if (n === 2) {
     // On foot: the sidewalk in front of the Coral Room, the delivery marker glowing over
     // the door, pedestrians about, cash on the ground. The whole first job in one frame.
     const door = { x: ROAD_X[1] + 360, y: ROAD_Y[1] - 250 };
-    const stand = safePoint(city, door.x + 54, door.y + 96);
+    const stand = safePoint(city, door.x - 14, door.y + 104);
     p.x = stand.x;
     p.y = stand.y;
     p.heading = -Math.PI / 2;
@@ -85,7 +91,7 @@ export function applyShot(world, index) {
     world.missionManager.start(0);
     world.missionManager.state = 'active';
     world.missionManager.setStep(1);
-    world.combat.addPickup(p.x + 104, p.y + 26, 'cash', 120);
+    world.combat.addPickup(p.x + 168, p.y - 34, 'cash', 120);
     world.combat.addPickup(p.x - 150, p.y - 90, 'health', 35);
     addShotPeds(world, [
       [p.x + 96, p.y - 96], [p.x - 74, p.y - 40], [p.x + 168, p.y + 70],
@@ -99,7 +105,7 @@ export function applyShot(world, index) {
       [p.x + 470, p.y + 96, 0, '#8a7bd8'],
     ]);
     world.hint = 'WASD to walk  ·  SHIFT to sprint  ·  click to fire';
-    return { offset: { x: 4, y: 30 }, zoom: 2.15, lockCamera: true };
+    return { offset: { x: -4, y: -34 }, zoom: 1.8, lockCamera: true };
   }
 
   if (n === 3) {
@@ -133,7 +139,7 @@ export function applyShot(world, index) {
     // survives the car rolling forward.
     world.police.stage = true;
     const slot = [
-      [-78, -150], [96, -192], [-16, -238], [-132, -282], [110, -326],
+      [-104, -48], [104, -60], [-48, -104], [-152, -128], [132, -120],
     ];
     for (let i = 0; i < slot.length; i++) {
       const cop = world.police.spawnCop({ player: { x: car.x, y: car.y + slot[i][1], heading: Math.PI / 2 } });
@@ -156,13 +162,13 @@ export function applyShot(world, index) {
     // mid-capture, and their headlights read as more cops. Nothing new spawns either,
     // so the frame stays the frame.
     world.cars = world.cars.filter((c) => c === car || c.driver === 'cop'
-      || Math.abs(c.x - car.x) > 130 || c.y < car.y - 560 || c.y > car.y + 300);
+      || Math.abs(c.x - car.x) > 150 || c.y < car.y - 480 || c.y > car.y + 260);
     world.traffic.cars = world.cars.filter((c) => c.driver === 'traffic');
     world.traffic.target = 0;
     world.hint = 'WASD — drive  ·  SPACE — handbrake  ·  E — bail out';
     // Player a little below centre, the cruisers stacked up the frame above them, and
     // enough city either side that the shot reads as a street rather than a corridor.
-    return { offset: { x: 0, y: -60 }, zoom: 1.0, autoThrottle: 0.55, lockCamera: true };
+    return { offset: { x: 0, y: 24 }, zoom: 1.5, autoThrottle: 0.55, lockCamera: true };
   }
 
   // 4 — mission briefing over the street.
@@ -183,9 +189,13 @@ export function applyShot(world, index) {
 function addShotCars(world, list) {
   for (const [x, y, angle, color] of list) {
     const car = makeCar({ x, y, angle, color, kind: 'sedan', driver: 'traffic' });
-    car.traffic = { lane: 1, dirX: 0, dirY: 1, nodeIndex: 0, route: [{ x, y: y + 600 }], target: { x, y: y + 600 } };
-    car.vx = Math.cos(angle) * 60;
-    car.vy = Math.sin(angle) * 60;
+    // The route has to run the way the car is pointing: a northbound car given a
+    // southbound target just U-turns on the spot and ends up diagonal across the lane.
+    const tx = x + Math.cos(angle) * 600;
+    const ty = y + Math.sin(angle) * 600;
+    car.traffic = { lane: 1, dirX: 0, dirY: 0, nodeIndex: 0, route: [{ x, y: ty }], target: { x: tx, y: ty } };
+    car.vx = Math.cos(angle) * 160;
+    car.vy = Math.sin(angle) * 160;
     car.staged = true;
     world.cars.push(car);
   }

@@ -811,20 +811,42 @@ function drawCopCar(ctx, c, time) {
   const w = c.w ?? 42;
   const h = c.h ?? 80;
   // White doors on the dark liveried body.
-  ctx.fillStyle = 'rgba(240,240,250,0.85)';
+  ctx.fillStyle = 'rgba(240,240,250,0.9)';
   ctx.fillRect(-w / 2, -h * 0.16, w, h * 0.2);
-  // Light bar, alternating blue and red.
-  const phase = Math.sin(time * 12 + c.x) > 0;
-  ctx.fillStyle = phase ? '#4f8bff' : '#20306a';
-  ctx.fillRect(-w / 2 + 4, -h * 0.5 + 4, w / 2 - 6, 5);
-  ctx.fillStyle = phase ? '#662030' : '#ff4257';
-  ctx.fillRect(1, -h * 0.5 + 4, w / 2 - 5, 5);
+  // Roof light bar: two fat blocks, one lit hard, one dim. A cruiser has to read as a
+  // cruiser from across the street, not just up close.
+  const phase = Math.sin(time * 8 + c.x * 0.5) > 0;
+  const barY = -h * 0.34;
+  const barH = Math.max(7, h * 0.1);
+  ctx.fillStyle = phase ? '#5b93ff' : '#1b2547';
+  ctx.fillRect(-w / 2 + 3, barY, w / 2 - 4, barH);
+  ctx.fillStyle = phase ? '#4a1620' : '#ff3d54';
+  ctx.fillRect(1, barY, w / 2 - 4, barH);
+  ctx.shadowColor = phase ? 'rgba(95,150,255,0.95)' : 'rgba(255,60,90,0.95)';
+  ctx.shadowBlur = 16;
+  ctx.fillStyle = phase ? '#b9d3ff' : '#ffb3be';
+  ctx.fillRect(phase ? -w / 2 + 5 : 3, barY + 1, w / 2 - 8, Math.max(3, barH - 3));
+  ctx.shadowBlur = 0;
+  // A rear-facing bar too: in a chase the player is looking at the back of the cruisers,
+  // and a cruiser seen from behind has to flash red and blue like one.
+  const rearY = h * 0.18;
+  ctx.fillStyle = phase ? '#2a1a24' : '#4a1620';
+  ctx.fillRect(-w / 2 + 4, rearY, w / 2 - 5, Math.max(6, h * 0.07));
+  ctx.fillStyle = phase ? '#7fb4ff' : '#ff5566';
+  ctx.shadowColor = phase ? 'rgba(127,180,255,0.95)' : 'rgba(255,85,102,0.95)';
+  ctx.shadowBlur = 18;
+  ctx.fillRect(-w / 2 + 5, rearY + 1, w / 2 - 7, Math.max(4, h * 0.05));
+  ctx.fillStyle = phase ? '#ff5566' : '#7fb4ff';
+  ctx.shadowColor = phase ? 'rgba(255,85,102,0.95)' : 'rgba(127,180,255,0.95)';
+  ctx.fillRect(1, rearY + 1, w / 2 - 7, Math.max(4, h * 0.05));
+  ctx.shadowBlur = 0;
   ctx.restore();
   // Glow
-  const r = 90 + Math.sin(time * 10) * 10;
-  const g = ctx.createRadialGradient(c.x, c.y, 8, c.x, c.y, r);
-  const col = Math.sin(time * 12 + c.x) > 0 ? '80,140,255' : '255,60,90';
-  g.addColorStop(0, `rgba(${col},0.18)`);
+  const r = 132 + Math.sin(time * 10) * 14;
+  const g = ctx.createRadialGradient(c.x, c.y, 6, c.x, c.y, r);
+  const col = Math.sin(time * 8 + c.x * 0.5) > 0 ? '90,150,255' : '255,55,85';
+  g.addColorStop(0, `rgba(${col},0.55)`);
+  g.addColorStop(0.45, `rgba(${col},0.2)`);
   g.addColorStop(1, `rgba(${col},0)`);
   ctx.fillStyle = g;
   ctx.beginPath();
